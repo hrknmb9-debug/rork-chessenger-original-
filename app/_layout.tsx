@@ -44,8 +44,8 @@ function RootLayoutNav() {
       screenOptions={{
         headerBackTitle: backTitle,
         headerTintColor: 'white',
-        headerStyle: { backgroundColor: 'red' },
-        contentStyle: { backgroundColor: 'red' },
+        headerStyle: { backgroundColor: colors.card },
+        contentStyle: { backgroundColor: colors.background },
         gestureEnabled: true,
         animation: 'default',
       }}
@@ -195,7 +195,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: 'red' }}>
+        <View style={{ flex: 1 }}>
           <AuthProvider>
             <LocationProvider>
               <ChessProvider>

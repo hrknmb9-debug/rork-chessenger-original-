@@ -84,7 +84,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const loadUser = async () => {
       try {
         console.log('Auth: Checking existing session...');
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('AUTH_ERROR:', sessionError);
         if (session?.user) {
           const defaultAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
           const authUser = await loadProfileFromSupabase(
