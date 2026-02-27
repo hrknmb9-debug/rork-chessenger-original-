@@ -43,8 +43,9 @@ function RootLayoutNav() {
     <Stack
       screenOptions={{
         headerBackTitle: backTitle,
-        headerTintColor: colors.textPrimary,
-        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: 'white',
+        headerStyle: { backgroundColor: 'red' },
+        contentStyle: { backgroundColor: 'red' },
         gestureEnabled: true,
         animation: 'default',
       }}
