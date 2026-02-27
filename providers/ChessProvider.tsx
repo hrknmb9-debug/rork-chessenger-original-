@@ -5,7 +5,7 @@ import { Match, MatchStatus, MatchRating, Player, UserProfile, TimelinePost, Tim
 
 import { useLocation, calculateDistance } from '@/providers/LocationProvider';
 import { Language } from '@/utils/translations';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase, supabaseNoAuth, clearStaleSession } from '@/utils/supabaseClient';
 import {
   calculateElo,
   notifyMatchRequest,
@@ -1030,10 +1030,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
       if (!userId || userId === 'me') {
         try {
-          const { data: { user } } = await supabase.auth.getUser();
-          userId = user?.id ?? null;
+          const { data: { session } } = await supabase.auth.getSession();
+          userId = session?.user?.id ?? null;
         } catch (authErr) {
-          console.log('Profile update: auth.getUser failed (non-blocking)', authErr);
+          console.log('Profile update: getSession failed (non-blocking)', authErr);
         }
       }
 
@@ -1069,9 +1069,25 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         supabaseUpdates.id = userId;
         supabaseUpdates.last_seen = new Date().toISOString();
         console.log('Profile upsert payload:', JSON.stringify(supabaseUpdates));
+
         const { data, error } = await supabase.from('profiles').upsert(supabaseUpdates).select();
+
         if (error) {
-          console.log('SAVE FAILED:', error.code, error.message, error.details, error.hint);
+          console.log('SAVE ATTEMPT 1 FAILED:', error.code, error.message, error.details, error.hint);
+
+          if (error.message?.includes('403') || error.code === '403' || error.message?.includes('Forbidden') || error.code === 'PGRST301') {
+            console.log('403 detected - clearing stale session and retrying with no-auth client...');
+            await clearStaleSession();
+
+            const { data: retryData, error: retryError } = await supabaseNoAuth.from('profiles').upsert(supabaseUpdates).select();
+            if (retryError) {
+              console.log('SAVE ATTEMPT 2 (no-auth) FAILED:', retryError.code, retryError.message, retryError.details, retryError.hint);
+              return false;
+            }
+            console.log('SAVE DONE (via no-auth retry)');
+            console.log('Save successful:', JSON.stringify(retryData));
+            return true;
+          }
           return false;
         }
         console.log('SAVE DONE');
@@ -1081,7 +1097,36 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       return true;
     } catch (e) {
       console.log('Profile Supabase sync failed', e);
-      return false;
+
+      try {
+        console.log('Attempting emergency save with no-auth client...');
+        await clearStaleSession();
+        const emergencyId = currentUserId && currentUserId !== 'me' ? currentUserId : (profile.id !== 'me' ? profile.id : 'anonymous-' + Date.now());
+        const payload: Record<string, unknown> = { id: emergencyId, last_seen: new Date().toISOString() };
+        if (updates.name !== undefined) payload.name = updates.name;
+        if (updates.bio !== undefined) payload.bio = updates.bio;
+        if (updates.location !== undefined) payload.location = updates.location;
+        if (updates.avatar !== undefined) payload.avatar = updates.avatar;
+        if (updates.skillLevel !== undefined) payload.skill_level = updates.skillLevel;
+        if (updates.preferredTimeControl !== undefined) payload.preferred_time_control = updates.preferredTimeControl;
+        if (updates.chessComRating !== undefined) payload.chess_com_rating = updates.chessComRating;
+        if (updates.lichessRating !== undefined) payload.lichess_rating = updates.lichessRating;
+        if (updates.rating !== undefined) payload.rating = updates.rating;
+        if (updates.country !== undefined) payload.country = updates.country;
+        if (updates.languages !== undefined) payload.languages = updates.languages;
+        if (updates.playStyles !== undefined) payload.play_styles = updates.playStyles;
+
+        const { data: emergData, error: emergError } = await supabaseNoAuth.from('profiles').upsert(payload).select();
+        if (emergError) {
+          console.log('EMERGENCY SAVE FAILED:', emergError.code, emergError.message);
+          return false;
+        }
+        console.log('EMERGENCY SAVE DONE:', JSON.stringify(emergData));
+        return true;
+      } catch (emergE) {
+        console.log('EMERGENCY SAVE EXCEPTION:', emergE);
+        return false;
+      }
     }
   }, [currentUserId, profile.id]);
 

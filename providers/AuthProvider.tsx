@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase, clearStaleSession } from '@/utils/supabaseClient';
 import { AuthUser } from '@/types';
 import { registerForPushNotificationsAsync, savePushTokenToSupabase } from '@/utils/notifications';
 
@@ -84,8 +84,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const loadUser = async () => {
       try {
         console.log('Auth: Checking existing session...');
+        await clearStaleSession();
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('AUTH_ERROR:', sessionError);
+        console.log('AUTH_SESSION_CHECK:', sessionError ? sessionError.message : 'no error', 'hasSession:', !!session);
         if (session?.user) {
           const defaultAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
           const authUser = await loadProfileFromSupabase(
@@ -98,8 +99,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
           console.log('Auth: User loaded from Supabase session', authUser.name);
         } else {
-          console.log('Auth: No active session found');
-          await AsyncStorage.removeItem(AUTH_KEY);
+          console.log('Auth: No active session found - app will work without login');
           setUser(null);
         }
       } catch (e) {
