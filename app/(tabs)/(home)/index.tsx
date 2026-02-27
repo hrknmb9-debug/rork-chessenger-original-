@@ -37,14 +37,6 @@ import { t } from '@/utils/translations';
 
 type TabKey = 'all' | 'nearby' | 'online';
 
-const SKILL_FILTERS: { key: SkillLevel | 'all'; labelKey: string }[] = [
-  { key: 'all', labelKey: 'all' },
-  { key: 'beginner', labelKey: 'beginner' },
-  { key: 'intermediate', labelKey: 'intermediate' },
-  { key: 'advanced', labelKey: 'advanced' },
-  { key: 'expert', labelKey: 'expert' },
-];
-
 function OnlineStrip({
   players,
   onPress,
@@ -56,9 +48,10 @@ function OnlineStrip({
   colors: ThemeColors;
   language: string;
 }) {
-  const online = useMemo(() => players.filter(p => p.isOnline).slice(0, 12), [players]);
-  if (online.length === 0) return null;
-
+  // フィルターを一時的に無効化して全員表示（デバッグ用）
+  const online = useMemo(() => players.slice(0, 12), [players]);
+  
+  // 0人でも枠だけは表示するように return null を削除
   return (
     <View style={{ marginBottom: 16 }}>
       <View style={strip.headerRow}>
@@ -72,7 +65,7 @@ function OnlineStrip({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={strip.scroll}
       >
-        {online.map(player => (
+        {online.length > 0 ? online.map(player => (
           <TouchableOpacity
             key={player.id}
             onPress={() => {
@@ -89,7 +82,11 @@ function OnlineStrip({
               {player.name.split(' ')[0]}
             </Text>
           </TouchableOpacity>
-        ))}
+        )) : (
+          <Text style={{ color: colors.textMuted, fontSize: 12, paddingLeft: 4 }}>
+            {language === 'ja' ? '待機中のプレイヤーはいません' : 'No players online'}
+          </Text>
+        )}
       </ScrollView>
     </View>
   );
@@ -116,7 +113,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeSkill, setActiveSkill] = useState<SkillLevel | 'all'>('all');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   const filteredPlayers = useMemo(() => {
@@ -125,11 +121,10 @@ export default function HomeScreen() {
       const q = searchQuery.toLowerCase();
       result = result.filter(p => p.name.toLowerCase().includes(q) || p.location.toLowerCase().includes(q));
     }
-    if (activeSkill !== 'all') result = result.filter(p => p.skillLevel === activeSkill);
     if (activeTab === 'nearby' && userLocation) result = result.filter(p => p.distance <= 10);
     else if (activeTab === 'online') result = result.filter(p => p.isOnline);
     return result.sort((a, b) => (a.isOnline === b.isOnline ? a.distance - b.distance : a.isOnline ? -1 : 1));
-  }, [players, searchQuery, activeSkill, activeTab, userLocation]);
+  }, [players, searchQuery, activeTab, userLocation]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -210,11 +205,14 @@ export default function HomeScreen() {
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    safeHeader: { backgroundColor: colors.background },
+    safeHeader: { 
+      backgroundColor: colors.background,
+      paddingTop: Platform.OS === 'ios' ? 10 : 30 // ロゴが隠れないように余白を追加
+    },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 12 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    headerLogo: { fontSize: 20 },
-    headerTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, letterSpacing: -0.4 },
+    headerLogo: { fontSize: 24 }, // 少し大きく
+    headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 }, // 太く大きく
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     headerIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' },
     listContent: { paddingBottom: 100 },
