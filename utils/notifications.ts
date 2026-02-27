@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase, supabaseNoAuth } from '@/utils/supabaseClient';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -68,7 +68,7 @@ export async function savePushTokenToSupabase(token: string): Promise<void> {
       return;
     }
 
-    const { error } = await supabase
+    const { error } = await supabaseNoAuth
       .from('profiles')
       .update({ expo_push_token: token })
       .eq('id', user.id);
@@ -117,7 +117,7 @@ export async function sendPushNotification(
 
 export async function getOpponentPushToken(opponentId: string): Promise<string | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseNoAuth
       .from('profiles')
       .select('expo_push_token')
       .eq('id', opponentId)

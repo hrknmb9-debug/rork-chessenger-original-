@@ -4,6 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
+const memoryStorage: Record<string, string> = {};
+const noopStorage = {
+  getItem: (key: string) => { return memoryStorage[key] ?? null; },
+  setItem: (key: string, value: string) => { memoryStorage[key] = value; },
+  removeItem: (key: string) => { delete memoryStorage[key]; },
+};
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: AsyncStorage,
@@ -15,10 +22,15 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 export const supabaseNoAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: noopStorage,
     autoRefreshToken: false,
     persistSession: false,
     detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
   },
 });
 

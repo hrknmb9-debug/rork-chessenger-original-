@@ -25,7 +25,7 @@ import { StatBox } from '@/components/StatBox';
 import { getSkillLabel, getSkillColor, getSkillBgColor, getWinRate, formatRating } from '@/utils/helpers';
 import { t, getLanguageFlag, getLanguageName, getCountryFlag, getCountryName } from '@/utils/translations';
 import { PlayStyle } from '@/types';
-import { supabase } from '@/utils/supabaseClient';
+import { supabaseNoAuth } from '@/utils/supabaseClient';
 
 function getPlayStyleDisplay(ps: PlayStyle, lang: string): { label: string; emoji: string } {
   const emojiMap: Record<PlayStyle, string> = {
@@ -105,7 +105,7 @@ export default function ProfileScreen() {
       const response = await fetch(uri);
       const blob = await response.blob();
       const filePath = `${user.id}/avatar.jpg`;
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabaseNoAuth.storage
         .from('avatars')
         .upload(filePath, blob, {
           cacheControl: '3600',
@@ -116,12 +116,12 @@ export default function ProfileScreen() {
         console.log('Profile avatar upload error:', uploadError.message);
         return uri;
       }
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicUrlData } = supabaseNoAuth.storage
         .from('avatars')
         .getPublicUrl(filePath);
       const publicUrl = publicUrlData.publicUrl + '?t=' + Date.now();
       console.log('Profile avatar upload success:', publicUrl);
-      await supabase.from('profiles').upsert({ id: user.id, avatar: publicUrl });
+      await supabaseNoAuth.from('profiles').upsert({ id: user.id, avatar: publicUrl });
       return publicUrl;
     } catch (e) {
       console.log('Profile avatar upload failed:', e);

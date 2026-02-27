@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Platform, Alert } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import { Coordinates } from '@/types';
-import { supabase } from '@/utils/supabaseClient';
+import { supabase, supabaseNoAuth } from '@/utils/supabaseClient';
 
 function getWebLocation(): Promise<Coordinates> {
   return new Promise((resolve, reject) => {
@@ -64,7 +64,7 @@ async function saveLocationToSupabase(coords: Coordinates): Promise<void> {
       console.log('Location: No authenticated user, skipping Supabase save');
       return;
     }
-    const { error } = await supabase.from('profiles').upsert({
+    const { error } = await supabaseNoAuth.from('profiles').upsert({
       id: user.id,
       latitude: coords.latitude,
       longitude: coords.longitude,

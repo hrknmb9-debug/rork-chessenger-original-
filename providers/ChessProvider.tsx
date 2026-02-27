@@ -203,7 +203,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     if (cached) return cached;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseNoAuth
         .from('profiles')
         .select('*')
         .eq('id', userId)
@@ -237,7 +237,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     const batchSize = 20;
     for (let i = 0; i < allAuthorIds.length; i += batchSize) {
       const batch = allAuthorIds.slice(i, i + batchSize);
-      const { data: profiles } = await supabase
+      const { data: profiles } = await supabaseNoAuth
         .from('profiles')
         .select('*')
         .in('id', batch);
@@ -364,9 +364,9 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         }
 
         if (userId) {
-          await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId);
+          await supabaseNoAuth.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId);
 
-          const { data: profileData, error: profileError } = await supabase
+          const { data: profileData, error: profileError } = await supabaseNoAuth
             .from('profiles')
             .select('*')
             .eq('id', userId)
@@ -412,7 +412,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         }
 
         const safeUserId = userId ?? 'no-user';
-        const { data: nearbyProfiles, error: nearbyError } = await supabase
+        const { data: nearbyProfiles, error: nearbyError } = await supabaseNoAuth
           .from('profiles')
           .select('*')
           .neq('id', safeUserId);
@@ -595,7 +595,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profileData, error } = await supabase
+      const { data: profileData, error } = await supabaseNoAuth
         .from('profiles')
         .select('*')
         .eq('id', user.id)
@@ -643,7 +643,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     const updateLastSeen = async () => {
       if (!currentUserId || currentUserId === 'me') return;
       try {
-        await supabase.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
+        await supabaseNoAuth.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', currentUserId);
       } catch (e) {
         console.log('ChessProvider: last_seen update failed', e);
       }
@@ -821,7 +821,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: nearbyProfiles, error } = await supabase
+      const { data: nearbyProfiles, error } = await supabaseNoAuth
         .from('profiles')
         .select('*')
         .neq('id', user.id);
@@ -1070,24 +1070,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         supabaseUpdates.last_seen = new Date().toISOString();
         console.log('Profile upsert payload:', JSON.stringify(supabaseUpdates));
 
-        const { data, error } = await supabase.from('profiles').upsert(supabaseUpdates).select();
+        const { data, error } = await supabaseNoAuth.from('profiles').upsert(supabaseUpdates).select();
 
         if (error) {
-          console.log('SAVE ATTEMPT 1 FAILED:', error.code, error.message, error.details, error.hint);
-
-          if (error.message?.includes('403') || error.code === '403' || error.message?.includes('Forbidden') || error.code === 'PGRST301') {
-            console.log('403 detected - clearing stale session and retrying with no-auth client...');
-            await clearStaleSession();
-
-            const { data: retryData, error: retryError } = await supabaseNoAuth.from('profiles').upsert(supabaseUpdates).select();
-            if (retryError) {
-              console.log('SAVE ATTEMPT 2 (no-auth) FAILED:', retryError.code, retryError.message, retryError.details, retryError.hint);
-              return false;
-            }
-            console.log('SAVE DONE (via no-auth retry)');
-            console.log('Save successful:', JSON.stringify(retryData));
-            return true;
-          }
+          console.log('SAVE FAILED:', error.code, error.message, error.details, error.hint);
           return false;
         }
         console.log('SAVE DONE');
@@ -1140,7 +1126,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
       const myRating = profile.rating || 1200;
 
-      const { data: opponentProfile } = await supabase
+      const { data: opponentProfile } = await supabaseNoAuth
         .from('profiles')
         .select('rating, games_played, wins, losses, draws')
         .eq('id', opponentId)
@@ -1175,7 +1161,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       else if (myResult === 'loss') myUpdate.losses = (profile.losses || 0) + 1;
       else myUpdate.draws = (profile.draws || 0) + 1;
 
-      await supabase.from('profiles').update(myUpdate).eq('id', user.id);
+      await supabaseNoAuth.from('profiles').update(myUpdate).eq('id', user.id);
 
       setProfile(prev => ({
         ...prev,
@@ -1195,7 +1181,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       else if (opResult === 'loss') opUpdate.losses = (opponentProfile?.losses || 0) + 1;
       else opUpdate.draws = (opponentProfile?.draws || 0) + 1;
 
-      await supabase.from('profiles').update(opUpdate).eq('id', opponentId);
+      await supabaseNoAuth.from('profiles').update(opUpdate).eq('id', opponentId);
 
       console.log('Elo updated: Me', myRating, '->', myNewRating, '| Opponent', opponentRating, '->', opponentNewRating);
     } catch (e) {

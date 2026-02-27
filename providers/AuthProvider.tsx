@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase, clearStaleSession } from '@/utils/supabaseClient';
+import { supabase, supabaseNoAuth, clearStaleSession } from '@/utils/supabaseClient';
 import { AuthUser } from '@/types';
 import { registerForPushNotificationsAsync, savePushTokenToSupabase } from '@/utils/notifications';
 
@@ -15,7 +15,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loadProfileFromSupabase = useCallback(async (userId: string, email: string, fallbackName: string, fallbackAvatar: string): Promise<AuthUser> => {
     try {
-      const { data: profileData, error } = await supabase
+      const { data: profileData, error } = await supabaseNoAuth
         .from('profiles')
         .select('*')
         .eq('id', userId)
@@ -48,7 +48,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const ensureProfileExists = useCallback(async (userId: string, email: string, name: string, avatar: string, extraData?: Record<string, unknown>) => {
     try {
-      const { data: existing } = await supabase
+      const { data: existing } = await supabaseNoAuth
         .from('profiles')
         .select('id')
         .eq('id', userId)
@@ -69,7 +69,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         ...extraData,
       };
 
-      const { error } = await supabase.from('profiles').upsert(profileRow);
+      const { error } = await supabaseNoAuth.from('profiles').upsert(profileRow);
       if (error) {
         console.log('Auth: Profile upsert error', error.message);
       } else {
@@ -255,7 +255,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           last_seen: new Date().toISOString(),
         };
 
-        const { error: insertError } = await supabase.from('profiles').upsert(profileRow);
+        const { error: insertError } = await supabaseNoAuth.from('profiles').upsert(profileRow);
         if (insertError) {
           console.log('Auth: Profile insert error after signup', insertError.message);
         } else {
@@ -346,7 +346,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       if (updates.avatar !== undefined) supabaseUpdates.avatar = updates.avatar;
 
       if (Object.keys(supabaseUpdates).length > 1) {
-        const { error } = await supabase.from('profiles').upsert(supabaseUpdates);
+        const { error } = await supabaseNoAuth.from('profiles').upsert(supabaseUpdates);
         if (error) {
           console.log('Auth: Supabase profile upsert error', error.message);
         }

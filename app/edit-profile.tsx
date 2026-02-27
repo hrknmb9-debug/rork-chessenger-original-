@@ -23,7 +23,7 @@ import { useChess } from '@/providers/ChessProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { SkillLevel, PlayStyle } from '@/types';
 import { t, COUNTRY_OPTIONS, LANGUAGE_OPTIONS, getCountryFlag, getCountryName, getLanguageFlag, getLanguageName } from '@/utils/translations';
-import { supabase } from '@/utils/supabaseClient';
+import { supabaseNoAuth } from '@/utils/supabaseClient';
 
 const SKILL_OPTIONS: SkillLevel[] = ['beginner', 'intermediate', 'advanced', 'expert'];
 const TIME_OPTIONS = ['5+0', '10+0', '15+10', '30+0', '60+30'];
@@ -95,7 +95,7 @@ export default function EditProfileScreen() {
       const fileExt = uri.split('.').pop()?.toLowerCase() ?? 'jpg';
       const filePath = `${user.id}/avatar.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabaseNoAuth.storage
         .from('avatars')
         .upload(filePath, blob, {
           cacheControl: '3600',
@@ -108,14 +108,14 @@ export default function EditProfileScreen() {
         return uri;
       }
 
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicUrlData } = supabaseNoAuth.storage
         .from('avatars')
         .getPublicUrl(filePath);
 
       const publicUrl = publicUrlData.publicUrl + '?t=' + Date.now();
       console.log('Avatar upload: Success, public URL:', publicUrl);
 
-      const { error: upsertError } = await supabase
+      const { error: upsertError } = await supabaseNoAuth
         .from('profiles')
         .upsert({ id: user.id, avatar: publicUrl });
 

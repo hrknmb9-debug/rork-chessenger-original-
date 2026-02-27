@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
 import { Platform, View } from "react-native";
-import { supabase } from "@/utils/supabaseClient";
+import { supabase, supabaseNoAuth } from "@/utils/supabaseClient";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LocationProvider } from "@/providers/LocationProvider";
 import { ChessProvider } from "@/providers/ChessProvider";
@@ -170,7 +170,7 @@ export default function RootLayout() {
       console.log('SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL);
       console.log('ANON_KEY exists:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
       try {
-        const { data, error } = await supabase.from('profiles').select('*').limit(1);
+        const { data, error } = await supabaseNoAuth.from('profiles').select('*').limit(1);
         console.log('DB READ Test Result:', JSON.stringify({ data, error }, null, 2));
         if (error) {
           console.log('DB READ ERROR CODE:', error.code);
