@@ -1071,9 +1071,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         console.log('Profile upsert payload:', JSON.stringify(supabaseUpdates));
         const { data, error } = await supabase.from('profiles').upsert(supabaseUpdates).select();
         if (error) {
-          console.log('Profile upsert error:', error.message, error.details, error.hint);
+          console.log('SAVE FAILED:', error.code, error.message, error.details, error.hint);
           return false;
         }
+        console.log('SAVE DONE');
         console.log('Save successful:', JSON.stringify(data));
         return true;
       }
