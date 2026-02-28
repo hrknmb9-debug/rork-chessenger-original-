@@ -93,6 +93,9 @@ function SwipeableConversation({
   const isFromMe =
     item.lastMessage.senderId === currentUserId ||
     item.lastMessage.senderId === 'me';
+  const previewText = item.lastMessage.text.startsWith('__IMG__')
+    ? '📷 画像'
+    : item.lastMessage.text;
 
   return (
     <Swipeable
@@ -139,7 +142,7 @@ function SwipeableConversation({
               style={[styles.previewText, isUnread && styles.previewTextUnread]}
               numberOfLines={1}
             >
-              {isFromMe ? '自分: ' : ''}{item.lastMessage.text}
+              {isFromMe ? '自分: ' : ''}{previewText}
             </Text>
             {isUnread && (
               <View style={styles.badge}>

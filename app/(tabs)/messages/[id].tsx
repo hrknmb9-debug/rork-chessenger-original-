@@ -21,12 +21,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import {
-  Send,
-  ImagePlus,
-  Check,
-  CheckCheck,
-} from 'lucide-react-native';
+import { Send, ImagePlus, Check, CheckCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemeColors } from '@/constants/colors';
@@ -36,7 +31,7 @@ import { Message, Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { t, getTimeAgo } from '@/utils/translations';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 
 const EMOJI_LIST = ['❤️', '👍', '😂', '😮', '😢', '🎉', '🔥', '👏'];
 
@@ -49,10 +44,16 @@ interface SupabaseMessage {
   created_at: string;
 }
 
-// image content encoding helpers
+type ListItem =
+  | { kind: 'date'; id: string; label: string }
+  | { kind: 'message'; id: string; msg: Message; isFirst: boolean; isLast: boolean };
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function encodeImageContent(uri: string): string {
   return `__IMG__${uri}`;
 }
+
 function decodeContent(content: string): { isImage: boolean; value: string } {
   if (content.startsWith('__IMG__')) {
     return { isImage: true, value: content.slice(7) };
@@ -60,7 +61,44 @@ function decodeContent(content: string): { isImage: boolean; value: string } {
   return { isImage: false, value: content };
 }
 
-// ── Emoji Reaction Picker ─────────────────────────────────────────────────────
+function formatDateLabel(isoStr: string): string {
+  const d = new Date(isoStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return '今日';
+  if (d.toDateString() === yesterday.toDateString()) return '昨日';
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function buildListItems(messages: Message[]): ListItem[] {
+  const items: ListItem[] = [];
+  let lastDateKey = '';
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const dateKey = new Date(msg.timestamp).toDateString();
+
+    if (dateKey !== lastDateKey) {
+      items.push({ kind: 'date', id: `date_${dateKey}`, label: formatDateLabel(msg.timestamp) });
+      lastDateKey = dateKey;
+    }
+
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+    const prevKey = prev ? new Date(prev.timestamp).toDateString() : '';
+    const nextKey = next ? new Date(next.timestamp).toDateString() : '';
+
+    const isFirst = !prev || prev.senderId !== msg.senderId || prevKey !== dateKey;
+    const isLast = !next || next.senderId !== msg.senderId || nextKey !== dateKey;
+
+    items.push({ kind: 'message', id: msg.id, msg, isFirst, isLast });
+  }
+
+  return items;
+}
+
+// ── Emoji Reaction Picker ──────────────────────────────────────────────────────
 
 function EmojiPicker({
   visible,
@@ -74,16 +112,8 @@ function EmojiPicker({
   colors: ThemeColors;
 }) {
   return (
-    <Modal
-      transparent
-      visible={visible}
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <Pressable
-        style={[pickerStyles.backdrop]}
-        onPress={onClose}
-      >
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+      <Pressable style={pickerStyles.backdrop} onPress={onClose}>
         <View style={[pickerStyles.container, { backgroundColor: colors.surface }]}>
           <View style={pickerStyles.emojiRow}>
             {EMOJI_LIST.map(emoji => (
@@ -131,8 +161,35 @@ const pickerStyles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 24,
   },
-  emoji: {
-    fontSize: 28,
+  emoji: { fontSize: 28 },
+});
+
+// ── Date Separator ─────────────────────────────────────────────────────────────
+
+function DateSeparator({ label, colors }: { label: string; colors: ThemeColors }) {
+  return (
+    <View style={dateSepStyles.wrapper}>
+      <View style={[dateSepStyles.line, { backgroundColor: colors.divider }]} />
+      <Text style={[dateSepStyles.label, { color: colors.textMuted }]}>{label}</Text>
+      <View style={[dateSepStyles.line, { backgroundColor: colors.divider }]} />
+    </View>
+  );
+}
+
+const dateSepStyles = StyleSheet.create({
+  wrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 12,
+    gap: 10,
+  },
+  line: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '500' as const,
   },
 });
 
@@ -141,6 +198,8 @@ const pickerStyles = StyleSheet.create({
 function MessageBubble({
   item,
   isMe,
+  isFirst,
+  isLast,
   chatPlayer,
   language,
   colors,
@@ -150,6 +209,8 @@ function MessageBubble({
 }: {
   item: Message;
   isMe: boolean;
+  isFirst: boolean;
+  isLast: boolean;
   chatPlayer: Player | null;
   language: string;
   colors: ThemeColors;
@@ -160,30 +221,53 @@ function MessageBubble({
   const { isImage, value } = decodeContent(item.text);
   const timeStr = getTimeAgo(item.timestamp, language);
 
-  // Group reactions
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
     reactions.forEach(e => { map[e] = (map[e] ?? 0) + 1; });
     return Object.entries(map);
   }, [reactions]);
 
+  // Threads-style grouped bubble corners
+  const bubbleRadius = useMemo(() => {
+    const big = 20;
+    const sm = 5;
+    if (isMe) {
+      return {
+        borderRadius: big,
+        borderTopRightRadius: isFirst ? big : sm,
+        borderBottomRightRadius: isLast ? big : sm,
+      };
+    }
+    return {
+      borderRadius: big,
+      borderTopLeftRadius: isFirst ? big : sm,
+      borderBottomLeftRadius: isLast ? big : sm,
+    };
+  }, [isMe, isFirst, isLast]);
+
   return (
     <View
       style={[
         styles.bubbleRow,
         isMe ? styles.bubbleRowMe : styles.bubbleRowOther,
+        isLast ? styles.bubbleRowLast : styles.bubbleRowContinue,
       ]}
     >
-      {/* Other user avatar */}
-      {!isMe && chatPlayer && (
-        <Image
-          source={{ uri: chatPlayer.avatar }}
-          style={styles.bubbleAvatar}
-          contentFit="cover"
-        />
+      {/* Avatar column (other user only) */}
+      {!isMe && (
+        isFirst && chatPlayer
+          ? <Image source={{ uri: chatPlayer.avatar }} style={styles.bubbleAvatar} contentFit="cover" />
+          : <View style={styles.avatarSpacer} />
       )}
 
       <View style={[styles.bubbleCol, isMe && styles.bubbleColMe]}>
+        {/* Sender name: first message in group, other user only */}
+        {!isMe && isFirst && chatPlayer && (
+          <Text style={[styles.senderName, { color: colors.textMuted }]}>
+            {chatPlayer.name}
+          </Text>
+        )}
+
         <Pressable
           onLongPress={() => {
             if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -192,14 +276,11 @@ function MessageBubble({
           style={[
             styles.bubble,
             isMe ? styles.bubbleMe : styles.bubbleOther,
+            bubbleRadius,
           ]}
         >
           {isImage ? (
-            <Image
-              source={{ uri: value }}
-              style={styles.imageMessage}
-              contentFit="cover"
-            />
+            <Image source={{ uri: value }} style={styles.imageMessage} contentFit="cover" />
           ) : (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
               {item.text}
@@ -207,15 +288,17 @@ function MessageBubble({
           )}
         </Pressable>
 
-        {/* Time + read receipt */}
-        <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
-          <Text style={styles.metaTime}>{timeStr}</Text>
-          {isMe && (
-            item.read
-              ? <CheckCheck size={13} color={colors.gold} />
-              : <Check size={13} color={colors.textMuted} />
-          )}
-        </View>
+        {/* Meta row: only on last message in group */}
+        {isLast && (
+          <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
+            <Text style={styles.metaTime}>{timeStr}</Text>
+            {isMe && (
+              item.read
+                ? <CheckCheck size={13} color={colors.gold} />
+                : <Check size={13} color={colors.textMuted} />
+            )}
+          </View>
+        )}
 
         {/* Reaction badges */}
         {reactionGroups.length > 0 && (
@@ -247,8 +330,6 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [chatPlayer, setChatPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // Emoji reaction state: messageId → emoji[]
   const [messageReactions, setMessageReactions] = useState<Record<string, string[]>>({});
   const [pickerTarget, setPickerTarget] = useState<string | null>(null);
 
@@ -432,20 +513,29 @@ export default function ChatScreen() {
     }));
   }, []);
 
+  // ── Build grouped list ─────────────────────────────────────────────────────
+
+  const listItems = useMemo(() => buildListItems(messages), [messages]);
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  const renderMessage = useCallback(({ item }: { item: Message }) => {
-    const isMe = item.senderId === currentUserId;
+  const renderItem = useCallback(({ item }: { item: ListItem }) => {
+    if (item.kind === 'date') {
+      return <DateSeparator label={item.label} colors={colors} />;
+    }
+    const isMe = item.msg.senderId === currentUserId;
     return (
       <MessageBubble
-        item={item}
+        item={item.msg}
         isMe={isMe}
+        isFirst={item.isFirst}
+        isLast={item.isLast}
         chatPlayer={chatPlayer}
         language={language}
         colors={colors}
         styles={styles}
-        onLongPress={() => setPickerTarget(item.id)}
-        reactions={messageReactions[item.id] ?? []}
+        onLongPress={() => setPickerTarget(item.msg.id)}
+        reactions={messageReactions[item.msg.id] ?? []}
       />
     );
   }, [chatPlayer, language, colors, styles, currentUserId, messageReactions]);
@@ -512,11 +602,10 @@ export default function ChatScreen() {
         style={styles.keyboardView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        {/* Message list */}
         <FlatList
           ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
+          data={listItems}
+          renderItem={renderItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
@@ -530,9 +619,7 @@ export default function ChatScreen() {
           }
         />
 
-        {/* Input bar */}
         <View style={styles.inputBar}>
-          {/* Image picker button */}
           <Pressable
             onPress={handlePickImage}
             style={[styles.mediaBtn, { backgroundColor: colors.surfaceLight }]}
@@ -540,7 +627,6 @@ export default function ChatScreen() {
             <ImagePlus size={20} color={colors.textSecondary} />
           </Pressable>
 
-          {/* Text input */}
           <TextInput
             style={styles.input}
             placeholder={t('type_message', language)}
@@ -553,7 +639,6 @@ export default function ChatScreen() {
             blurOnSubmit={false}
           />
 
-          {/* Send button */}
           <Pressable
             onPress={handleSend}
             style={[
@@ -567,7 +652,6 @@ export default function ChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Emoji Reaction Picker */}
       <EmojiPicker
         visible={pickerTarget !== null}
         onSelect={emoji => {
@@ -641,8 +725,8 @@ function createStyles(colors: ThemeColors) {
     // Messages list
     messagesList: {
       paddingHorizontal: 14,
-      paddingVertical: 16,
-      gap: 6,
+      paddingTop: 12,
+      paddingBottom: 8,
     },
     emptyChat: {
       alignItems: 'center',
@@ -651,18 +735,23 @@ function createStyles(colors: ThemeColors) {
     emptyChatText: {
       fontSize: 14,
     },
-    // Bubbles
+    // Bubble rows
     bubbleRow: {
       flexDirection: 'row',
       alignItems: 'flex-end',
       gap: 8,
-      marginVertical: 2,
     },
     bubbleRowMe: {
       justifyContent: 'flex-end',
     },
     bubbleRowOther: {
       justifyContent: 'flex-start',
+    },
+    bubbleRowContinue: {
+      marginBottom: 2,
+    },
+    bubbleRowLast: {
+      marginBottom: 10,
     },
     bubbleAvatar: {
       width: 30,
@@ -671,6 +760,9 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.surfaceLight,
       marginBottom: 4,
     },
+    avatarSpacer: {
+      width: 30,
+    },
     bubbleCol: {
       maxWidth: '75%',
       gap: 3,
@@ -678,18 +770,21 @@ function createStyles(colors: ThemeColors) {
     bubbleColMe: {
       alignItems: 'flex-end',
     },
+    senderName: {
+      fontSize: 11,
+      fontWeight: '500' as const,
+      marginLeft: 4,
+      marginBottom: 2,
+    },
     bubble: {
       paddingHorizontal: 15,
       paddingVertical: 10,
-      borderRadius: 20,
     },
     bubbleMe: {
       backgroundColor: colors.gold,
-      borderBottomRightRadius: 5,
     },
     bubbleOther: {
       backgroundColor: colors.surface,
-      borderBottomLeftRadius: 5,
     },
     bubbleText: {
       fontSize: 15,
@@ -712,6 +807,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: 4,
       paddingHorizontal: 2,
+      marginTop: 2,
     },
     metaRowMe: {
       justifyContent: 'flex-end',
