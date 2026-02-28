@@ -203,9 +203,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           data.user.user_metadata?.name ?? email.split('@')[0],
           defaultAvatar
         );
-        await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
+        try {
+          await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
+          console.log('Auth: AsyncStorage write success for', AUTH_KEY);
+        } catch (storageErr) {
+          console.log('Auth: AsyncStorage write FAILED', storageErr);
+        }
         setUser(authUser);
-        console.log('Auth: Supabase login success', authUser.name);
+        console.log('Auth: Supabase login success', authUser.name, '| session expires:', data.session?.expires_at);
         return true;
       }
       return false;
