@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { supabase, supabaseNoAuth, clearStaleSession } from '@/utils/supabaseClient';
 import { AuthUser } from '@/types';
 import { registerForPushNotificationsAsync, savePushTokenToSupabase } from '@/utils/notifications';
@@ -12,6 +13,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const initialLoadDone = useRef(false);
+  const router = useRouter();
 
   const loadProfileFromSupabase = useCallback(async (userId: string, email: string, fallbackName: string, fallbackAvatar: string): Promise<AuthUser> => {
     try {
@@ -159,6 +161,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setUser(null);
         await AsyncStorage.removeItem(AUTH_KEY);
         console.log('Auth: SIGNED_OUT - user cleared');
+        // initialLoadDone 後の SIGNED_OUT はセッション切れ → ログイン画面へ強制遷移
+        if (initialLoadDone.current) {
+          try {
+            router.push('/login' as any);
+          } catch (navErr) {
+            console.log('Auth: Navigation to login failed', navErr);
+          }
+        }
       }
     });
 

@@ -114,7 +114,7 @@ export default function ProfileScreen() {
         <View style={styles.profileInfo}>
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: resolveAvatarUrl(profile.avatar || user.avatar) }}
+              source={{ uri: resolveAvatarUrl(profile.avatar || user.avatar) || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(profile.name || user.name || 'U') + '&size=200&background=random&color=fff&bold=true') }}
               style={styles.avatar}
               contentFit="cover"
             />

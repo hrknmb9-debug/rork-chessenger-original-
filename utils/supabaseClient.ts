@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 declare global {
   var _supabaseSingleton: SupabaseClient | undefined;
   var _supabaseNoAuthSingleton: SupabaseClient | undefined;
+  var _supabaseAuthListenerSetup: boolean | undefined;
 }
 
 const memoryStorage: Record<string, string> = {};
@@ -46,6 +47,26 @@ if (!global._supabaseNoAuthSingleton) {
 
 export const supabase = global._supabaseSingleton;
 export const supabaseNoAuth = global._supabaseNoAuthSingleton;
+
+// Global listener: clear stale storage on token refresh failure (SIGNED_OUT)
+// Runs only once per app lifecycle via singleton guard
+if (global._supabaseSingleton && !global._supabaseAuthListenerSetup) {
+  global._supabaseAuthListenerSetup = true;
+  global._supabaseSingleton.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_OUT' && !session) {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const sbKeys = keys.filter(k => k.includes('supabase') || k.includes('sb-'));
+        if (sbKeys.length > 0) {
+          await AsyncStorage.multiRemove(sbKeys);
+          console.log('supabaseClient: Cleared stale tokens on SIGNED_OUT', sbKeys.length, 'keys');
+        }
+      } catch (e) {
+        console.log('supabaseClient: Storage cleanup error', e);
+      }
+    }
+  });
+}
 
 export async function clearStaleSession(): Promise<void> {
   try {

@@ -60,7 +60,11 @@ function PlayerCardComponent({ player, onPress, language = 'ja' }: PlayerCardPro
       >
         <View style={styles.header}>
           <View style={styles.avatarContainer}>
-            <Image source={{ uri: player.avatar }} style={styles.avatar} contentFit="cover" />
+            <Image
+              source={{ uri: player.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(player.name) + '&size=104&background=random&color=fff&bold=true') }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
             {player.isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.info}>
