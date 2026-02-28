@@ -34,10 +34,21 @@ import { supabase } from '@/utils/supabaseClient';
 
 type TabKey = 'all' | 'nearby' | 'online';
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
+
+function resolveAvatarUrl(raw: string | null | undefined): string {
+  if (!raw) return DEFAULT_AVATAR;
+  if (raw.startsWith('http')) return raw;
+  // Storage path like "userId/avatar.jpg" — construct public bucket URL
+  return SUPABASE_URL + '/storage/v1/object/public/avatars/' + raw;
+}
+
 interface SupabaseProfile {
   id: string;
   name?: string;
   avatar?: string;
+  avatar_url?: string;
   bio?: string;
   rating?: number;
   chess_com_rating?: number | null;
@@ -69,7 +80,7 @@ function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number
   return {
     id: profile.id,
     name: profile.name ?? 'Unknown',
-    avatar: profile.avatar ?? 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face',
+    avatar: resolveAvatarUrl(profile.avatar_url ?? profile.avatar),
     rating: profile.rating ?? 0,
     chessComRating: profile.chess_com_rating ?? null,
     lichessRating: profile.lichess_rating ?? null,

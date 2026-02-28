@@ -44,6 +44,15 @@ const SKILL_EMOJI: Record<string, string> = {
   expert: '👑',
 };
 
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
+
+function resolveAvatarUrl(raw: string | null | undefined): string {
+  if (!raw) return DEFAULT_AVATAR;
+  if (raw.startsWith('http')) return raw;
+  return SUPABASE_URL + '/storage/v1/object/public/avatars/' + raw;
+}
+
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const { user, logout } = useAuth();
@@ -105,7 +114,7 @@ export default function ProfileScreen() {
         <View style={styles.profileInfo}>
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: profile.avatar || user.avatar || 'https://images.unsplash.com/photo-1528892952291-009c663ce843?w=400' }}
+              source={{ uri: resolveAvatarUrl(profile.avatar || user.avatar) }}
               style={styles.avatar}
               contentFit="cover"
             />
