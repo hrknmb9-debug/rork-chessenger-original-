@@ -25,6 +25,16 @@ if (!global._supabaseSingleton) {
 export const supabase = global._supabaseSingleton;
 export const supabaseNoAuth = global._supabaseSingleton;
 
+// Debug helper: call this anywhere to log current session state
+export async function debugSession(): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    console.log('debugSession: JWT present, user=' + session.user.id + ' expires=' + session.expires_at);
+  } else {
+    console.log('debugSession: NO session — requests will use anon role');
+  }
+}
+
 export async function clearStaleSession(): Promise<void> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
