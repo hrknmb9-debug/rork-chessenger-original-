@@ -560,7 +560,7 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '500' as const,
     },
     badge: {
-      backgroundColor: colors.gold,
+      backgroundColor: '#EF4444',
       minWidth: 20,
       height: 20,
       borderRadius: 10,
@@ -571,7 +571,7 @@ function createStyles(colors: ThemeColors) {
     badgeText: {
       fontSize: 11,
       fontWeight: '700' as const,
-      color: colors.white,
+      color: '#ffffff',
     },
     // Empty / loading
     center: {

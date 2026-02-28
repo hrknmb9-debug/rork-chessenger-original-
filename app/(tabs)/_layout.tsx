@@ -48,7 +48,8 @@ export default function TabLayout() {
         const { count, error } = await supabase
           .from('messages')
           .select('*', { count: 'exact', head: true })
-          .eq('receiver_id', user.id)
+          .ilike('room_id', `%${user.id}%`)
+          .neq('sender_id', user.id)
           .eq('is_read', false);
 
         if (!error && count !== null) {
@@ -66,19 +67,21 @@ export default function TabLayout() {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `receiver_id=eq.${user.id}`,
-      }, () => {
-        console.log('TabLayout: New message received, refreshing unread count');
-        fetchUnread();
+      }, (payload) => {
+        const msg = payload.new as { room_id: string; sender_id: string };
+        if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
+          fetchUnread();
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'messages',
-        filter: `receiver_id=eq.${user.id}`,
-      }, () => {
-        console.log('TabLayout: Message updated, refreshing unread count');
-        fetchUnread();
+      }, (payload) => {
+        const msg = payload.new as { room_id: string; sender_id: string };
+        if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
+          fetchUnread();
+        }
       })
       .subscribe();
 

@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { Send, ImagePlus, Check, CheckCheck } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Check, CheckCheck } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemeColors } from '@/constants/colors';
@@ -591,7 +591,9 @@ export default function ChatScreen() {
               <View>
                 <Text style={styles.headerName}>{chatPlayer.name}</Text>
                 <Text style={[styles.headerStatus, chatPlayer.isOnline && { color: '#22C55E' }]}>
-                  {chatPlayer.isOnline ? t('online', language) : (chatPlayer.lastSeen ?? chatPlayer.lastActive)}
+                  {chatPlayer.isOnline
+                    ? t('online', language)
+                    : `最終ログイン ${getTimeAgo(chatPlayer.lastSeen ?? chatPlayer.lastActive, language)}`}
                 </Text>
               </View>
             </Pressable>
@@ -625,9 +627,9 @@ export default function ChatScreen() {
         <View style={[styles.inputBar, { borderTopColor: colors.divider }]}>
           <Pressable
             onPress={handlePickImage}
-            style={[styles.mediaBtn, { backgroundColor: colors.surfaceLight }]}
+            style={[styles.mediaBtn, { backgroundColor: colors.surfaceLight, borderWidth: 1, borderColor: colors.divider }]}
           >
-            <ImagePlus size={20} color={colors.textSecondary} />
+            <ImageIcon size={20} color={colors.textSecondary} />
           </Pressable>
 
           <TextInput
