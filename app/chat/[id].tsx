@@ -89,47 +89,88 @@ export default function ChatScreen() {
   // ── Load history ───────────────────────────────────────────────────────────
 
   useEffect(() => {
+    // No roomId → nothing to load
+    if (!roomId) {
+      setLoading(false);
+      return;
+    }
+
+    // currentUserId not yet available → keep the spinner and wait.
+    // This effect will re-run once ChessProvider resolves the user.
+    if (!currentUserId) {
+      console.log('Chat: [Load] Waiting for currentUserId …');
+      return;
+    }
+
+    // Reset to loading whenever the key deps change (e.g. roomId switches)
+    setLoading(true);
+
     const loadChat = async () => {
-      if (!roomId || !currentUserId) { setLoading(false); return; }
+      console.log('Chat: [Load] START — roomId:', roomId, '| currentUserId:', currentUserId);
 
       try {
+        // ── New conversation (no history yet) ──
         if (isNewConversation && playerIdFromNew) {
           const player = await fetchPlayerProfile(playerIdFromNew);
           setChatPlayer(player);
           setMessages([]);
-          setLoading(false);
+          console.log('Chat: [Load] New conversation for player', playerIdFromNew);
           return;
         }
 
-        const parts = roomId.split('_');
-        const otherUserId = parts.find(p => p !== currentUserId);
+        // ── Existing room ──
+        // Derive the other participant's id from the room ID.
+        // Room format: "<uid1>_<uid2>" (sorted), where uids are UUIDs (hyphens, no underscores).
+        const separatorIdx = (() => {
+          // Find the single underscore that is NOT inside a UUID segment.
+          // UUIDs look like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars).
+          // A valid room ID is exactly two UUIDs joined by one underscore.
+          const mid = roomId.indexOf('_', 30); // skip at least 30 chars of the first UUID
+          return mid;
+        })();
+
+        let otherUserId: string | undefined;
+        if (separatorIdx > 0) {
+          const part1 = roomId.slice(0, separatorIdx);
+          const part2 = roomId.slice(separatorIdx + 1);
+          otherUserId = part1 === currentUserId ? part2 : part1;
+        }
+
+        console.log('Chat: [Load] otherUserId:', otherUserId);
+
         if (otherUserId) {
           const player = await fetchPlayerProfile(otherUserId);
           setChatPlayer(player);
+        } else {
+          console.log('Chat: [Load] WARN — could not derive otherUserId from roomId:', roomId);
         }
 
+        // ── Fetch message history ──
+        console.log('Chat: [Load] Querying messages WHERE room_id =', roomId);
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('room_id', roomId)
           .order('created_at', { ascending: true });
 
-        if (data && !error) {
-          setMessages(data.map(mapRow));
-          console.log('Chat: Loaded', data.length, 'messages for room', roomId);
+        if (error) {
+          console.log('Chat: [Load] Query ERROR:', error.message, error.code);
+        } else {
+          console.log('Chat: [Load] Fetched', data?.length ?? 0, 'messages');
+          setMessages((data ?? []).map(mapRow));
 
-          // Mark incoming messages as read
-          await supabase
-            .from('messages')
-            .update({ is_read: true })
-            .eq('room_id', roomId)
-            .neq('sender_id', currentUserId)
-            .eq('is_read', false);
-        } else if (error) {
-          console.log('Chat: Load error', error.message);
+          // Mark unread incoming messages as read
+          if (data && data.length > 0) {
+            await supabase
+              .from('messages')
+              .update({ is_read: true })
+              .eq('room_id', roomId)
+              .neq('sender_id', currentUserId)
+              .eq('is_read', false);
+          }
         }
       } catch (e) {
-        console.log('Chat: Failed to load messages', e);
+        console.log('Chat: [Load] Exception:', e);
       } finally {
         setLoading(false);
       }
