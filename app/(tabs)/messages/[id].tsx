@@ -140,13 +140,13 @@ const pickerStyles = StyleSheet.create({
     alignItems: 'center',
   },
   container: {
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowRadius: 24,
+    elevation: 12,
   },
   emojiRow: {
     flexDirection: 'row',
@@ -155,13 +155,13 @@ const pickerStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   emojiBtn: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 24,
+    borderRadius: 25,
   },
-  emoji: { fontSize: 28 },
+  emoji: { fontSize: 30 },
 });
 
 // ── Date Separator ─────────────────────────────────────────────────────────────
@@ -180,7 +180,8 @@ const dateSepStyles = StyleSheet.create({
   wrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 12,
+    marginVertical: 16,
+    marginHorizontal: 8,
     gap: 10,
   },
   line: {
@@ -190,6 +191,7 @@ const dateSepStyles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '500' as const,
+    letterSpacing: 0.3,
   },
 });
 
@@ -227,9 +229,9 @@ function MessageBubble({
     return Object.entries(map);
   }, [reactions]);
 
-  // Threads-style grouped bubble corners
+  // Threads-style grouped bubble corner radius
   const bubbleRadius = useMemo(() => {
-    const big = 20;
+    const big = 22;
     const sm = 5;
     if (isMe) {
       return {
@@ -253,7 +255,7 @@ function MessageBubble({
         isLast ? styles.bubbleRowLast : styles.bubbleRowContinue,
       ]}
     >
-      {/* Avatar column (other user only) */}
+      {/* Avatar column — other user only */}
       {!isMe && (
         isFirst && chatPlayer
           ? <Image source={{ uri: chatPlayer.avatar }} style={styles.bubbleAvatar} contentFit="cover" />
@@ -261,7 +263,7 @@ function MessageBubble({
       )}
 
       <View style={[styles.bubbleCol, isMe && styles.bubbleColMe]}>
-        {/* Sender name: first message in group, other user only */}
+        {/* Sender name: first in group, other user only */}
         {!isMe && isFirst && chatPlayer && (
           <Text style={[styles.senderName, { color: colors.textMuted }]}>
             {chatPlayer.name}
@@ -288,7 +290,7 @@ function MessageBubble({
           )}
         </Pressable>
 
-        {/* Meta row: only on last message in group */}
+        {/* Meta row: time + read receipt — last message in group only */}
         {isLast && (
           <View style={[styles.metaRow, isMe && styles.metaRowMe]}>
             <Text style={styles.metaTime}>{timeStr}</Text>
@@ -304,7 +306,7 @@ function MessageBubble({
         {reactionGroups.length > 0 && (
           <View style={[styles.reactionRow, isMe && styles.reactionRowMe]}>
             {reactionGroups.map(([emoji, count]) => (
-              <View key={emoji} style={[styles.reactionBadge, { backgroundColor: colors.surface }]}>
+              <View key={emoji} style={[styles.reactionBadge, { backgroundColor: colors.surface, borderColor: colors.divider }]}>
                 <Text style={styles.reactionEmoji}>{emoji}</Text>
                 {count > 1 && <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{count}</Text>}
               </View>
@@ -588,7 +590,7 @@ export default function ChatScreen() {
               </View>
               <View>
                 <Text style={styles.headerName}>{chatPlayer.name}</Text>
-                <Text style={[styles.headerStatus, chatPlayer.isOnline && { color: colors.green }]}>
+                <Text style={[styles.headerStatus, chatPlayer.isOnline && { color: '#22C55E' }]}>
                   {chatPlayer.isOnline ? t('online', language) : (chatPlayer.lastSeen ?? chatPlayer.lastActive)}
                 </Text>
               </View>
@@ -619,7 +621,8 @@ export default function ChatScreen() {
           }
         />
 
-        <View style={styles.inputBar}>
+        {/* Input bar */}
+        <View style={[styles.inputBar, { borderTopColor: colors.divider }]}>
           <Pressable
             onPress={handlePickImage}
             style={[styles.mediaBtn, { backgroundColor: colors.surfaceLight }]}
@@ -628,7 +631,7 @@ export default function ChatScreen() {
           </Pressable>
 
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: colors.surface, color: colors.textPrimary, borderColor: colors.divider }]}
             placeholder={t('type_message', language)}
             placeholderTextColor={colors.textMuted}
             value={inputText}
@@ -708,7 +711,7 @@ function createStyles(colors: ThemeColors) {
       width: 11,
       height: 11,
       borderRadius: 6,
-      backgroundColor: colors.green,
+      backgroundColor: '#22C55E',
       borderWidth: 2,
       borderColor: colors.background,
     },
@@ -724,13 +727,13 @@ function createStyles(colors: ThemeColors) {
     },
     // Messages list
     messagesList: {
-      paddingHorizontal: 14,
-      paddingTop: 12,
-      paddingBottom: 8,
+      paddingHorizontal: 16,
+      paddingTop: 14,
+      paddingBottom: 10,
     },
     emptyChat: {
       alignItems: 'center',
-      paddingTop: 60,
+      paddingTop: 80,
     },
     emptyChatText: {
       fontSize: 14,
@@ -751,7 +754,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: 2,
     },
     bubbleRowLast: {
-      marginBottom: 10,
+      marginBottom: 12,
     },
     bubbleAvatar: {
       width: 30,
@@ -777,14 +780,17 @@ function createStyles(colors: ThemeColors) {
       marginBottom: 2,
     },
     bubble: {
-      paddingHorizontal: 15,
-      paddingVertical: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 11,
     },
     bubbleMe: {
       backgroundColor: colors.gold,
     },
+    // Other-user bubbles get a subtle border so they stand out on white backgrounds
     bubbleOther: {
       backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.divider,
     },
     bubbleText: {
       fontSize: 15,
@@ -807,7 +813,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: 4,
       paddingHorizontal: 2,
-      marginTop: 2,
+      marginTop: 3,
     },
     metaRowMe: {
       justifyContent: 'flex-end',
@@ -834,7 +840,6 @@ function createStyles(colors: ThemeColors) {
       borderRadius: 12,
       gap: 2,
       borderWidth: 1,
-      borderColor: colors.divider,
     },
     reactionEmoji: {
       fontSize: 14,
@@ -849,10 +854,9 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'flex-end',
       paddingHorizontal: 12,
       paddingVertical: 10,
-      paddingBottom: Platform.OS === 'ios' ? 12 : 10,
+      paddingBottom: Platform.OS === 'ios' ? 14 : 10,
       gap: 8,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: colors.divider,
       backgroundColor: colors.background,
     },
     mediaBtn: {
@@ -864,14 +868,13 @@ function createStyles(colors: ThemeColors) {
     },
     input: {
       flex: 1,
-      backgroundColor: colors.surface,
       borderRadius: 22,
+      borderWidth: 1,
       paddingHorizontal: 16,
       paddingVertical: Platform.OS === 'ios' ? 10 : 8,
       fontSize: 15,
-      color: colors.textPrimary,
       maxHeight: 120,
-      minHeight: 40,
+      minHeight: 42,
     },
     sendBtn: {
       width: 40,

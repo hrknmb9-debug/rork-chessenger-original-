@@ -57,36 +57,26 @@ function SwipeableConversation({
   const { currentUserId } = useChess();
 
   const close = useCallback(() => swipeRef.current?.close(), []);
-
   const handleRead = useCallback(() => { close(); onRead(); }, [close, onRead]);
   const handleDelete = useCallback(() => { close(); onDelete(); }, [close, onDelete]);
   const handleBlock = useCallback(() => { close(); onBlock(); }, [close, onBlock]);
 
   const renderRightActions = useCallback(() => (
     <View style={styles.rightActions}>
-      <Pressable
-        style={[styles.actionBtn, { backgroundColor: colors.blue }]}
-        onPress={handleRead}
-      >
-        <CheckCheck size={18} color={colors.white} />
+      <Pressable style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]} onPress={handleRead}>
+        <CheckCheck size={20} color="#fff" />
         <Text style={styles.actionLabel}>既読</Text>
       </Pressable>
-      <Pressable
-        style={[styles.actionBtn, { backgroundColor: colors.red }]}
-        onPress={handleDelete}
-      >
-        <Trash2 size={18} color={colors.white} />
+      <Pressable style={[styles.actionBtn, { backgroundColor: '#EF4444' }]} onPress={handleDelete}>
+        <Trash2 size={20} color="#fff" />
         <Text style={styles.actionLabel}>削除</Text>
       </Pressable>
-      <Pressable
-        style={[styles.actionBtn, { backgroundColor: colors.orange }]}
-        onPress={handleBlock}
-      >
-        <ShieldOff size={18} color={colors.white} />
+      <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={handleBlock}>
+        <ShieldOff size={20} color="#fff" />
         <Text style={styles.actionLabel}>ブロック</Text>
       </Pressable>
     </View>
-  ), [colors, handleRead, handleDelete, handleBlock, styles]);
+  ), [handleRead, handleDelete, handleBlock, styles]);
 
   const isUnread = item.unreadCount > 0;
   const timeAgo = getTimeAgo(item.lastMessage.timestamp, language);
@@ -110,7 +100,6 @@ function SwipeableConversation({
         style={({ pressed }) => [
           styles.conversationItem,
           pressed && styles.conversationPressed,
-          isUnread && styles.conversationUnread,
         ]}
       >
         {/* Avatar */}
@@ -158,10 +147,6 @@ function SwipeableConversation({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-function getRoomId(userId1: string, userId2: string): string {
-  return [userId1, userId2].sort().join('_');
-}
-
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -172,7 +157,7 @@ export default function MessagesScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ── Load conversations ────────────────────────────────────────────────────
+  // ── Load conversations ─────────────────────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
     if (!currentUserId || currentUserId === 'me') {
@@ -265,7 +250,7 @@ export default function MessagesScreen() {
     }
   }, [isLoggedIn, currentUserId, loadConversations]);
 
-  // ── Realtime ──────────────────────────────────────────────────────────────
+  // ── Realtime ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!currentUserId || currentUserId === 'me') return;
@@ -287,7 +272,7 @@ export default function MessagesScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [currentUserId, loadConversations]);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   const markConversationRead = useCallback(async (roomId: string) => {
     setConversations(prev =>
@@ -374,7 +359,7 @@ export default function MessagesScreen() {
     />
   ), [handleConversationPress, handleRead, handleDelete, handleBlock, language, colors, styles]);
 
-  // ── Not logged in ─────────────────────────────────────────────────────────
+  // ── Not logged in ──────────────────────────────────────────────────────────
 
   if (!isLoggedIn) {
     return (
@@ -393,7 +378,7 @@ export default function MessagesScreen() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -402,7 +387,7 @@ export default function MessagesScreen() {
         <Search size={16} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="会話を検索..."
+          placeholder="検索"
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -427,7 +412,7 @@ export default function MessagesScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.center}>
-              <MessageCircle size={52} color={colors.textMuted} />
+              <MessageCircle size={48} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>{t('no_messages', language)}</Text>
               <Text style={styles.emptySubtitle}>{t('start_chatting', language)}</Text>
             </View>
@@ -452,11 +437,11 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       marginHorizontal: 16,
       marginTop: 12,
-      marginBottom: 8,
+      marginBottom: 6,
       backgroundColor: colors.surface,
-      borderRadius: 14,
+      borderRadius: 12,
       paddingHorizontal: 14,
-      height: 44,
+      height: 42,
       gap: 10,
     },
     searchInput: {
@@ -480,65 +465,61 @@ function createStyles(colors: ThemeColors) {
     },
     // List
     listContent: {
+      paddingTop: 4,
       paddingBottom: 24,
     },
     // Swipeable actions
     rightActions: {
       flexDirection: 'row',
-      width: 192,
+      width: 198,
     },
     actionBtn: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 4,
+      gap: 5,
     },
     actionLabel: {
-      fontSize: 10,
+      fontSize: 11,
       fontWeight: '600' as const,
       color: '#ffffff',
       textAlign: 'center' as const,
     },
-    // Conversation row
+    // Conversation row — no bottom border, spacing via padding only
     conversationItem: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingVertical: 14,
-      gap: 13,
+      paddingVertical: 13,
+      gap: 14,
       backgroundColor: colors.background,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.divider,
     },
     conversationPressed: {
       backgroundColor: colors.surfaceLight,
-    },
-    conversationUnread: {
-      backgroundColor: colors.goldMuted,
     },
     avatarWrapper: {
       position: 'relative',
     },
     avatar: {
-      width: 54,
-      height: 54,
-      borderRadius: 27,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       backgroundColor: colors.surfaceLight,
     },
     onlineDot: {
       position: 'absolute',
       bottom: 2,
       right: 2,
-      width: 13,
-      height: 13,
+      width: 14,
+      height: 14,
       borderRadius: 7,
-      backgroundColor: colors.green,
-      borderWidth: 2,
+      backgroundColor: '#22C55E',
+      borderWidth: 2.5,
       borderColor: colors.background,
     },
     conversationBody: {
       flex: 1,
-      gap: 5,
+      gap: 4,
     },
     conversationHeader: {
       flexDirection: 'row',
@@ -546,7 +527,7 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     playerName: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '500' as const,
       color: colors.textPrimary,
       flex: 1,
@@ -610,6 +591,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 14,
       color: colors.textMuted,
       textAlign: 'center' as const,
+      lineHeight: 21,
     },
     // Login prompt
     loginPrompt: {
