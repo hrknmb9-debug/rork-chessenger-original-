@@ -576,27 +576,7 @@ export default function ChatScreen() {
           headerTintColor: colors.textPrimary,
           headerShadowVisible: false,
           headerTitle: () => (
-            <Pressable
-              onPress={() => router.push(`/player/${chatPlayer.id}` as any)}
-              style={styles.headerTitle}
-            >
-              <View style={styles.headerAvatarWrapper}>
-                <Image
-                  source={{ uri: chatPlayer.avatar }}
-                  style={styles.headerAvatar}
-                  contentFit="cover"
-                />
-                {chatPlayer.isOnline && <View style={styles.headerOnlineDot} />}
-              </View>
-              <View>
-                <Text style={styles.headerName}>{chatPlayer.name}</Text>
-                {chatPlayer.isOnline && (
-                  <Text style={[styles.headerStatus, { color: '#22C55E' }]}>
-                    {t('online', language)}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
+            <Text style={styles.headerName}>テスト反映中</Text>
           ),
         }}
       />
