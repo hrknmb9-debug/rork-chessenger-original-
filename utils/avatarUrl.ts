@@ -10,14 +10,16 @@ export function resolveAvatarUrl(raw: string | null | undefined, name?: string):
     encodeURIComponent(initials) +
     '&size=200&background=4F46E5&color=fff&bold=true';
 
-  // Treat null / undefined / "" / "  " all as missing
+  // Treat null / undefined / "" / whitespace / local paths as missing
   if (!raw || raw.trim() === '') return fallback;
+  const r = raw.trim();
+  if (r.startsWith('file://') || r.startsWith('blob:') || r.startsWith('/var') || r.startsWith('/private')) return fallback;
 
-  // Already a full URL (http/https) — return as-is
-  if (raw.startsWith('http')) return raw;
+  // Full Supabase public URL already stored — return as-is
+  if (r.startsWith('http')) return r;
 
-  // Storage path (e.g. "user-id/avatar.jpg") → direct public URL, no auth required
-  if (SUPABASE_URL) return PUBLIC_AVATAR_BASE + raw.trim();
+  // Storage path (e.g. "user-id/avatar.jpg") → construct full public URL
+  if (SUPABASE_URL) return PUBLIC_AVATAR_BASE + r;
 
   return fallback;
 }
