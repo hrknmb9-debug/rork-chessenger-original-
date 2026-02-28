@@ -81,6 +81,11 @@ export default function ChatScreen() {
   const isNewConversation = roomId.startsWith('new_');
   const playerIdFromNew = isNewConversation ? roomId.replace('new_', '') : null;
 
+  // Keep currentUserId in a ref so realtime callbacks always read the latest
+  // value without the channel needing to be recreated on every userId change.
+  const currentUserIdRef = useRef(currentUserId);
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
+
   // ── Load history ───────────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -134,84 +139,103 @@ export default function ChatScreen() {
   }, [roomId, currentUserId, isNewConversation, playerIdFromNew, fetchPlayerProfile]);
 
   // ── Realtime subscription ──────────────────────────────────────────────────
+  // Only re-subscribe when roomId changes. currentUserId is read via ref so
+  // the channel doesn't need to be torn down just because the user object updated.
 
   useEffect(() => {
     if (!roomId || isNewConversation) return;
 
-    // Use a unique channel name to avoid conflicts with messages/[id].tsx
     const channelName = `chat_screen_${roomId}`;
-    console.log('Chat: Subscribing to channel', channelName);
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    // Use a mutable ref so the retry closure can swap the channel pointer.
+    const state = { channel: null as ReturnType<typeof supabase.channel> | null };
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          const msg = payload.new as SupabaseMessage;
-          console.log(
-            'Chat: Realtime INSERT →',
-            msg.id,
-            '| sender:', msg.sender_id,
-            '| content[:30]:', msg.content?.slice(0, 30),
-            '| isImg:', msg.content?.startsWith(IMG_PREFIX),
-          );
+    const buildChannel = () => {
+      // Always remove any previous channel before creating a new one.
+      if (state.channel) {
+        supabase.removeChannel(state.channel);
+        state.channel = null;
+      }
 
-          const newMsg = mapRow(msg);
+      console.log('Chat: [Realtime] Connecting →', channelName);
 
-          setMessages(prev => {
-            // 1. Already present by exact id
-            if (prev.some(m => m.id === newMsg.id)) return prev;
+      state.channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `room_id=eq.${roomId}`,
+          },
+          async (payload) => {
+            const msg = payload.new as SupabaseMessage;
+            const uid = currentUserIdRef.current;
 
-            // 2. Own message: replace the temp placeholder that is still pending
-            if (msg.sender_id === currentUserId && pendingTempIds.current.size > 0) {
-              const tempIdx = prev.findIndex(
-                m => pendingTempIds.current.has(m.id) && m.text === newMsg.text
-              );
-              if (tempIdx !== -1) {
-                const updated = [...prev];
-                const tempId = updated[tempIdx].id;
-                updated[tempIdx] = { ...updated[tempIdx], id: newMsg.id };
-                pendingTempIds.current.delete(tempId);
-                return updated;
+            console.log(
+              'Chat: [Realtime] INSERT →',
+              msg.id,
+              '| sender:', msg.sender_id,
+              '| isImg:', String(msg.content?.startsWith(IMG_PREFIX)),
+              '| content[:40]:', msg.content?.slice(0, 40),
+            );
+
+            const newMsg = mapRow(msg);
+
+            setMessages(prev => {
+              // Already present — deduplicate
+              if (prev.some(m => m.id === newMsg.id)) return prev;
+
+              // Own message: try to replace the pending temp placeholder
+              if (msg.sender_id === uid && pendingTempIds.current.size > 0) {
+                const tempIdx = prev.findIndex(
+                  m => pendingTempIds.current.has(m.id) && m.text === newMsg.text,
+                );
+                if (tempIdx !== -1) {
+                  const updated = [...prev];
+                  const tempId = updated[tempIdx].id;
+                  updated[tempIdx] = { ...updated[tempIdx], id: newMsg.id };
+                  pendingTempIds.current.delete(tempId);
+                  return updated;
+                }
               }
+
+              return [...prev, newMsg];
+            });
+
+            if (msg.sender_id !== uid) {
+              await supabase
+                .from('messages')
+                .update({ is_read: true })
+                .eq('id', msg.id);
             }
 
-            // 3. New incoming message
-            return [...prev, newMsg];
-          });
-
-          // Mark incoming messages as read immediately
-          if (msg.sender_id !== currentUserId) {
-            await supabase
-              .from('messages')
-              .update({ is_read: true })
-              .eq('id', msg.id);
+            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+          },
+        )
+        .subscribe((status, err) => {
+          if (err) {
+            console.log('Chat: [Realtime] ERROR —', err.message ?? err);
+          } else {
+            console.log('Chat: [Realtime] Status →', status);
           }
 
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        },
-      )
-      .subscribe((status, err) => {
-        if (err) {
-          console.log('Chat: Realtime subscribe ERROR', err);
-        } else {
-          console.log('Chat: Realtime status →', status);
-        }
-      });
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.log('Chat: [Realtime] Retrying in 3 s …');
+            retryTimer = setTimeout(buildChannel, 3000);
+          }
+        });
+    };
+
+    buildChannel();
 
     return () => {
-      console.log('Chat: Removing channel', channelName);
-      supabase.removeChannel(channel);
+      console.log('Chat: [Realtime] Cleaning up channel', channelName);
+      if (retryTimer) clearTimeout(retryTimer);
+      if (state.channel) supabase.removeChannel(state.channel);
     };
-  }, [roomId, currentUserId, isNewConversation]);
+  }, [roomId, isNewConversation]);
 
   // ── Room ID helpers ────────────────────────────────────────────────────────
 
