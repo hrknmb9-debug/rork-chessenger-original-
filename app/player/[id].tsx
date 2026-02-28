@@ -102,7 +102,7 @@ export default function PlayerDetailScreen() {
     if (!player || !id || !currentUserId) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const roomId = [currentUserId, id].sort().join('_');
-    router.push(('/chat/' + roomId) as any);
+    router.push(('/messages/' + roomId) as any);
   }, [player, id, router, currentUserId]);
 
   const handleBlockToggle = useCallback(() => {

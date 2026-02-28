@@ -254,7 +254,7 @@ export default function HomeScreen() {
           <PlayerCard
             player={item}
             onPress={() => router.push(('/player/' + item.id) as any)}
-            onMessagePress={() => router.push(('/chat/new_' + item.id) as any)}
+            onMessagePress={() => router.push(('/messages/new_' + item.id) as any)}
             language={language}
           />
         )}
