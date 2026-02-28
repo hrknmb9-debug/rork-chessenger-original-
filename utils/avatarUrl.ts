@@ -17,7 +17,11 @@ export function resolveAvatarUrl(raw: string | null | undefined, name?: string):
   if (raw.startsWith('http')) return raw;
 
   // Storage path (e.g. "user-id/avatar.jpg") → direct public URL, no auth required
-  if (SUPABASE_URL) return PUBLIC_AVATAR_BASE + raw.trim();
+  if (SUPABASE_URL) {
+    const fullUrl = PUBLIC_AVATAR_BASE + raw.trim();
+    console.error('DEBUG_FULL_URL:', fullUrl, '| raw:', raw.trim(), '| SUPABASE_URL:', SUPABASE_URL);
+    return fullUrl;
+  }
 
   return fallback;
 }
