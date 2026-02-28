@@ -277,6 +277,7 @@ export default function MessagesScreen() {
   // ── Actions ────────────────────────────────────────────────────────────────
 
   const markConversationRead = useCallback(async (roomId: string) => {
+    console.log('Notification cleared by: markConversationRead (list swipe)', roomId);
     setConversations(prev =>
       prev.map(c => c.id !== roomId ? c : {
         ...c,
@@ -297,12 +298,14 @@ export default function MessagesScreen() {
 
   const handleConversationPress = useCallback((conv: Conversation) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    markConversationRead(conv.id);
+    // NOTE: markConversationRead は呼ばない。既読処理はトークルーム([id].tsx)を開いた時のみ実行する
+    // markConversationRead(conv.id);  // ← 自動既読をここで実行するとバッジが即消えるため無効化
     router.push(`/messages/${conv.id}` as any);
-  }, [router, markConversationRead]);
+  }, [router]);
 
   const handleRead = useCallback((roomId: string) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // スワイプ「既読」アクションのみ markConversationRead を呼ぶ（ユーザーの明示的操作）
     markConversationRead(roomId);
   }, [markConversationRead]);
 

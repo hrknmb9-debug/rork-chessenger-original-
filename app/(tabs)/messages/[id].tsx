@@ -377,6 +377,7 @@ export default function ChatScreen() {
             read: m.is_read,
           })));
 
+          console.log('Notification cleared by: [id].tsx loadChat auto-mark-read room=', roomId);
           await supabase
             .from('messages')
             .update({ is_read: true })
@@ -420,6 +421,7 @@ export default function ChatScreen() {
           return [...prev, newMsg];
         });
         if (msg.sender_id !== currentUserId) {
+          console.log('Notification cleared by: [id].tsx realtime-INSERT auto-mark-read id=', msg.id);
           await supabase.from('messages').update({ is_read: true }).eq('id', msg.id);
         }
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);

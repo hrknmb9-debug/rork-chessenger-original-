@@ -43,7 +43,8 @@ export default function TabLayout() {
   useEffect(() => {
     if (!user?.id || user.id === 'me') return;
 
-    const fetchUnread = async () => {
+    const fetchUnread = async (caller: string) => {
+      console.log('Notification cleared by: fetchUnread called from', caller);
       try {
         const { count, error } = await supabase
           .from('messages')
@@ -53,13 +54,14 @@ export default function TabLayout() {
           .eq('is_read', false);
 
         if (!error && count !== null) {
+          console.log('TabLayout: fetchUnread result =', count, '(caller:', caller, ')');
           setUnreadMessageCount(count);
         }
       } catch (e) {
         console.log('TabLayout: Failed to fetch unread count', e);
       }
     };
-    fetchUnread();
+    fetchUnread('initial-login');
 
     const channel = supabase
       .channel('unread-messages-badge')
@@ -70,7 +72,7 @@ export default function TabLayout() {
       }, (payload) => {
         const msg = payload.new as { room_id: string; sender_id: string };
         if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
-          fetchUnread();
+          fetchUnread('realtime-INSERT');
         }
       })
       .on('postgres_changes', {
@@ -78,9 +80,10 @@ export default function TabLayout() {
         schema: 'public',
         table: 'messages',
       }, (payload) => {
-        const msg = payload.new as { room_id: string; sender_id: string };
+        const msg = payload.new as { room_id: string; sender_id: string; is_read: boolean };
         if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
-          fetchUnread();
+          console.log('Notification cleared by: realtime-UPDATE is_read=', msg.is_read, 'room=', msg.room_id);
+          fetchUnread('realtime-UPDATE');
         }
       })
       .subscribe();
