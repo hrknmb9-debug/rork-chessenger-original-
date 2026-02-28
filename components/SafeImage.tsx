@@ -28,17 +28,12 @@ export function SafeImage({ uri, name, style, contentFit = 'cover' }: SafeImageP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uri]);
 
-  console.log('SafeImage uri:', uri, '→ src:', src);
-
   return (
     <Image
       source={{ uri: src }}
       style={style}
       contentFit={contentFit}
-      onError={() => {
-        console.log('SafeImage onError:', src);
-        setSrc(fallback);
-      }}
+      onError={() => setSrc(fallback)}
     />
   );
 }

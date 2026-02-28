@@ -11,7 +11,5 @@ export function resolveAvatarUrl(raw: string | null | undefined, name?: string):
   const r = raw.trim();
 
   // Already a full URL — return as-is
-  const finalUrl = r.startsWith('http') ? r : PUBLIC_AVATAR_BASE + r;
-  console.log('GENERATED_URL:', finalUrl, '| raw:', r);
-  return finalUrl;
+  return r.startsWith('http') ? r : PUBLIC_AVATAR_BASE + r;
 }
