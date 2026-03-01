@@ -45,6 +45,5 @@ rork-eslint.config.js
 core
 node_modules
 .expo
-bun.lock
 bun.lockb
 package-lock.json

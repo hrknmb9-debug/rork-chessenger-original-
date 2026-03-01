@@ -1,7 +1,7 @@
 {
   "name": "expo-app",
   "main": "expo-router/entry",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "scripts": {
     "start": "bunx rork start -p 30e8dzkl5ptrsftnsy7by --tunnel",
     "start-web": "bunx rork start -p 30e8dzkl5ptrsftnsy7by --web --tunnel",
@@ -20,6 +20,7 @@
     "expo": "~54.0.27",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.11",
+    "expo-device": "~8.0.10",
     "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
@@ -27,6 +28,7 @@
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.10",
     "expo-location": "~19.0.8",
+    "expo-notifications": "~0.32.16",
     "expo-router": "~6.0.17",
     "expo-splash-screen": "~31.0.12",
     "expo-status-bar": "~3.0.9",
