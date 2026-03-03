@@ -23,8 +23,13 @@ import { Message, Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { t, getTimeAgo } from '@/utils/translations';
 import { BackNavButton } from '@/components/BackNavButton';
-
-const IMG_PREFIX = '__IMG__';
+import {
+  uploadMessageImage,
+  encodeImageContent,
+  decodeMessageContent,
+  isImageMessageContent,
+  getImageUrlFromContent,
+} from '@/utils/messageImageUpload';
 
 interface SupabaseMessage {
   id: string;
@@ -33,14 +38,6 @@ interface SupabaseMessage {
   content: string;
   is_read: boolean;
   created_at: string;
-}
-
-function isImageContent(text: string | undefined | null): boolean {
-  return typeof text === 'string' && text.startsWith(IMG_PREFIX);
-}
-
-function getImageUri(text: string): string {
-  return text.slice(IMG_PREFIX.length);
 }
 
 function mapRow(m: SupabaseMessage): Message {
@@ -248,14 +245,17 @@ export default function ChatScreen() {
       }, 100);
 
       try {
+        const { isImage, value: imageUrl } = decodeMessageContent(content);
+        const payload = {
+          room_id: actualRoomId,
+          sender_id: currentUserId,
+          content,
+          is_read: false,
+          ...(isImage && imageUrl ? { image_url: imageUrl } : {}),
+        };
         const { data, error } = await supabase
           .from('messages')
-          .insert({
-            room_id: actualRoomId,
-            sender_id: currentUserId,
-            content,
-            is_read: false,
-          })
+          .insert(payload)
           .select()
           .single();
 
@@ -299,27 +299,43 @@ export default function ChatScreen() {
     }
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
         allowsEditing: true,
         aspect: [4, 3],
+        base64: true,
       });
       if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const localUri = asset.uri;
+        const base64 = asset.base64 ?? undefined;
         if (Platform.OS !== 'web') {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
-        await sendContent(IMG_PREFIX + result.assets[0].uri);
+        const actualRoomId = getActualRoomId();
+        const { data: { user } } = await supabase.auth.getUser();
+        const authUserId = user?.id;
+        if (!authUserId) {
+          Alert.alert(t('error', language), 'ログイン情報を取得できなかったため、画像を送信できませんでした。');
+          return;
+        }
+        const uploadResult = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
+        if ('url' in uploadResult) {
+          await sendContent(encodeImageContent(uploadResult.url));
+        } else {
+          Alert.alert(t('error', language), uploadResult.error);
+        }
       }
     } catch (e) {
       console.log('Chat: image pick failed ' + String(e));
     }
-  }, [sendContent]);
+  }, [sendContent, getActualRoomId, language]);
 
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => {
       const isMe = item.senderId === currentUserId;
-      const isImg = isImageContent(item.text);
-      const imgUri = isImg ? getImageUri(item.text) : null;
+      const isImg = isImageMessageContent(item.text);
+      const imgUri = isImg ? getImageUrlFromContent(item.text) : null;
 
       return (
         <View
