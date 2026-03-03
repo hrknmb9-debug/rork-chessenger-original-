@@ -308,29 +308,33 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         };
       });
 
-      const postType = (post.type as TimelinePost['type']) ?? 'general';
+      // posts.type が 'event' でなくても、events テーブルに紐づく行があればイベント投稿として扱う
+      const rawEvent = allEvents.find(
+        (e: Record<string, unknown>) => e.id === post.id || e.post_id === post.id
+      ) as Record<string, unknown> | undefined;
 
+      let postType: TimelinePost['type'] =
+        ((post.type as TimelinePost['type']) ?? 'general');
       let event: TimelineEvent | undefined;
-      if (postType === 'event') {
-        const eventData = allEvents.find((e: Record<string, unknown>) => e.id === post.id || e.post_id === post.id) as Record<string, unknown> | undefined;
-        if (eventData) {
-          const participants = allEventParticipants
-            .filter(ep => ep.event_id === (eventData.id as string))
-            .map(ep => ep.user_id);
-          event = {
-            id: eventData.id as string,
-            userId: post.user_id,
-            title: (eventData.title as string) ?? post.content,
-            date: (eventData.date as string) ?? '',
-            time: (eventData.time as string) ?? '',
-            location: (eventData.location as string) ?? '',
-            maxParticipants: (eventData.max_participants as number) ?? 10,
-            participants,
-            createdAt: (eventData.created_at as string) ?? post.created_at,
-            deadlineAt: (eventData.deadline_at as string) ?? undefined,
-            isClosed: !!(eventData.closed_at as string | null),
-          };
-        }
+
+      if (rawEvent) {
+        postType = 'event';
+        const participants = allEventParticipants
+          .filter(ep => ep.event_id === (rawEvent.id as string))
+          .map(ep => ep.user_id);
+        event = {
+          id: rawEvent.id as string,
+          userId: post.user_id,
+          title: (rawEvent.title as string) ?? post.content,
+          date: (rawEvent.date as string) ?? '',
+          time: (rawEvent.time as string) ?? '',
+          location: (rawEvent.location as string) ?? '',
+          maxParticipants: (rawEvent.max_participants as number) ?? 10,
+          participants,
+          createdAt: (rawEvent.created_at as string) ?? post.created_at,
+          deadlineAt: (rawEvent.deadline_at as string) ?? undefined,
+          isClosed: !!(rawEvent.closed_at as string | null),
+        };
       }
 
       return {
