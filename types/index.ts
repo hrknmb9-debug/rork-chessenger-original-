@@ -112,6 +112,8 @@ export interface AuthUser {
   name: string;
   avatar: string;
   isLoggedIn: boolean;
+  chessComRating?: number | null;
+  bio?: string;
 }
 
 export interface Message {

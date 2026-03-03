@@ -26,6 +26,7 @@ export interface ThemeColors {
   tabBar: string;
   tabBarBorder: string;
   inputBg?: string;
+  accent: string;
 }
 
 export const LightTheme: ThemeColors = {
@@ -56,6 +57,7 @@ export const LightTheme: ThemeColors = {
   tabBar: '#FFFFFF',
   tabBarBorder: '#D4E2D4',
   inputBg: '#ECF3EC',
+  accent: '#2B9B50',
 };
 
 export const DarkTheme: ThemeColors = {
@@ -86,6 +88,7 @@ export const DarkTheme: ThemeColors = {
   tabBar: '#0D1A12',
   tabBarBorder: '#1C2E22',
   inputBg: '#1C2E22',
+  accent: '#4ADE80',
 };
 
 const Colors = LightTheme;

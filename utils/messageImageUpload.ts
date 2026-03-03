@@ -39,18 +39,17 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
 async function readImageViaManipulator(uri: string): Promise<ArrayBuffer | null> {
   try {
     const ImageManipulator = await import('expo-image-manipulator');
-    type Mod = typeof ImageManipulator & { SaveFormat?: { JPEG: number } };
-    const format = (ImageManipulator as Mod).SaveFormat?.JPEG ?? 1;
+    const format = ImageManipulator.SaveFormat?.JPEG ?? ('jpeg' as any);
     const result = await ImageManipulator.manipulateAsync(uri, [], {
       compress: 0.85,
-      format,
+      format: format as any,
     });
     const outUri = result?.uri;
     if (!outUri) {
       console.warn(LOG_TAG, 'manipulateAsync returned no uri');
       return null;
     }
-    const FileSystem = await import('expo-file-system/legacy').catch(() => import('expo-file-system'));
+    const FileSystem = await import('expo-file-system').catch(() => null) as any;
     const base64 = await FileSystem.readAsStringAsync(outUri, { encoding: FileSystem.EncodingType.Base64 });
     if (base64) return base64ToArrayBuffer(base64);
   } catch (e) {
@@ -97,7 +96,7 @@ export async function uploadMessageImage(
       }
       if (!arrayBuffer) {
         try {
-          const FileSystem = await import('expo-file-system/legacy').catch(() => import('expo-file-system'));
+          const FileSystem = await import('expo-file-system').catch(() => null) as any;
           const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
           if (base64) arrayBuffer = base64ToArrayBuffer(base64);
         } catch (fsErr) {

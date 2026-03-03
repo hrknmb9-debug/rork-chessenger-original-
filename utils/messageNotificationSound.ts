@@ -66,7 +66,7 @@ export async function primeAudioForApp(): Promise<void> {
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       staysActiveInBackground: false,
-      shouldDuckOthers: true,
+      shouldDuckAndroid: true,
       playThroughEarpieceAndroid: false,
       interruptionModeAndroid: 1,
       interruptionModeIOS: 1,
