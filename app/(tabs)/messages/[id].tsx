@@ -22,7 +22,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { SafeImage } from '@/components/SafeImage';
-import { Send, Image as ImageIcon, Check, CheckCheck } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Check, CheckCheck, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemeColors } from '@/constants/colors';
@@ -195,6 +195,34 @@ const dateSepStyles = StyleSheet.create({
   },
 });
 
+const expandedImageStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageContainer: {
+    flex: 1,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  image: {
+    flex: 1,
+    width: '100%',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 48,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
 // ── Message Bubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -207,6 +235,7 @@ function MessageBubble({
   colors,
   styles,
   onLongPress,
+  onImagePress,
   reactions,
 }: {
   item: Message;
@@ -218,6 +247,7 @@ function MessageBubble({
   colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
   onLongPress: () => void;
+  onImagePress?: (url: string) => void;
   reactions: string[];
 }) {
   const { isImage, value } = decodeMessageContent(item.text);
@@ -283,7 +313,9 @@ function MessageBubble({
           ]}
         >
           {(isImage || imageUrl) && imageUrl && isLoadableImageUrl(imageUrl) ? (
-            <Image source={{ uri: imageUrl }} style={styles.imageMessage} contentFit="cover" />
+            <Pressable onPress={() => onImagePress?.(imageUrl)} style={styles.imageMessageWrap}>
+              <Image source={{ uri: imageUrl }} style={styles.imageMessage} contentFit="cover" />
+            </Pressable>
           ) : (isImage || imageUrl) && imageUrl ? (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
@@ -338,6 +370,7 @@ export default function ChatScreen() {
   const [messageReactions, setMessageReactions] = useState<Record<string, string[]>>({});
   const [pickerTarget, setPickerTarget] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
 
   const roomId = id ?? '';
   const isNewConversation = roomId.startsWith('new_');
@@ -597,6 +630,7 @@ export default function ChatScreen() {
         colors={colors}
         styles={styles}
         onLongPress={() => setPickerTarget(item.msg.id)}
+        onImagePress={setExpandedImageUrl}
         reactions={messageReactions[item.msg.id] ?? []}
       />
     );
@@ -732,6 +766,34 @@ export default function ChatScreen() {
         onClose={() => setPickerTarget(null)}
         colors={colors}
       />
+
+      <Modal
+        visible={expandedImageUrl !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExpandedImageUrl(null)}
+      >
+        <Pressable
+          style={expandedImageStyles.backdrop}
+          onPress={() => setExpandedImageUrl(null)}
+        >
+          {expandedImageUrl ? (
+            <Pressable style={expandedImageStyles.imageContainer} onPress={e => e.stopPropagation()}>
+              <Image
+                source={{ uri: expandedImageUrl }}
+                style={expandedImageStyles.image}
+                contentFit="contain"
+              />
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={[expandedImageStyles.closeBtn, { backgroundColor: colors.surface }]}
+            onPress={() => setExpandedImageUrl(null)}
+          >
+            <X size={24} color={colors.textPrimary} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -873,6 +935,11 @@ function createStyles(colors: ThemeColors) {
     },
     bubbleTextOther: {
       color: colors.textPrimary,
+    },
+    imageMessageWrap: {
+      width: 200,
+      height: 150,
+      borderRadius: 12,
     },
     imageMessage: {
       width: 200,
