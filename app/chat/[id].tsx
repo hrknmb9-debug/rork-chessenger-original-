@@ -38,6 +38,7 @@ interface SupabaseMessage {
   content: string;
   is_read: boolean;
   created_at: string;
+  image_url?: string | null;
 }
 
 function mapRow(m: SupabaseMessage): Message {
@@ -47,6 +48,7 @@ function mapRow(m: SupabaseMessage): Message {
     text: m.content,
     timestamp: m.created_at,
     read: m.is_read,
+    imageUrl: m.image_url ?? undefined,
   };
 }
 
@@ -63,6 +65,7 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [chatPlayer, setChatPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const roomId = id ?? '';
   const isNewConversation = roomId.startsWith('new_');
@@ -319,11 +322,16 @@ export default function ChatScreen() {
           Alert.alert(t('error', language), 'ログイン情報を取得できなかったため、画像を送信できませんでした。');
           return;
         }
-        const uploadResult = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
-        if ('url' in uploadResult) {
-          await sendContent(encodeImageContent(uploadResult.url));
-        } else {
-          Alert.alert(t('error', language), uploadResult.error);
+        setIsUploadingImage(true);
+        try {
+          const uploadResult = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
+          if ('url' in uploadResult) {
+            await sendContent(encodeImageContent(uploadResult.url));
+          } else {
+            Alert.alert(t('error', language), uploadResult.error);
+          }
+        } finally {
+          setIsUploadingImage(false);
         }
       }
     } catch (e) {
@@ -334,8 +342,8 @@ export default function ChatScreen() {
   const renderMessage = useCallback(
     ({ item }: { item: Message }) => {
       const isMe = item.senderId === currentUserId;
-      const isImg = isImageMessageContent(item.text);
-      const imgUri = isImg ? getImageUrlFromContent(item.text) : null;
+      const isImg = isImageMessageContent(item.text) || !!item.imageUrl;
+      const imgUri = (isImg ? getImageUrlFromContent(item.text) || item.imageUrl : null) ?? null;
 
       return (
         <View
@@ -472,8 +480,13 @@ export default function ChatScreen() {
                 borderColor: colors.gold,
               },
             ]}
+            disabled={isUploadingImage}
           >
-            <ImageIcon size={22} color={colors.gold} />
+            {isUploadingImage ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <ImageIcon size={22} color={colors.gold} />
+            )}
           </Pressable>
 
           <TextInput

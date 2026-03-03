@@ -50,6 +50,7 @@ interface SupabaseMessage {
   content: string;
   is_read: boolean;
   created_at: string;
+  image_url?: string | null;
 }
 
 type ListItem =
@@ -218,6 +219,7 @@ function MessageBubble({
   reactions: string[];
 }) {
   const { isImage, value } = decodeMessageContent(item.text);
+  const imageUrl = value || item.imageUrl;
   const timeStr = getTimeAgo(item.timestamp, language);
 
   const reactionGroups = useMemo(() => {
@@ -278,8 +280,8 @@ function MessageBubble({
             bubbleRadius,
           ]}
         >
-          {isImage ? (
-            <Image source={{ uri: value }} style={styles.imageMessage} contentFit="cover" />
+          {(isImage || imageUrl) && imageUrl ? (
+            <Image source={{ uri: imageUrl }} style={styles.imageMessage} contentFit="cover" />
           ) : (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
               {item.text}
@@ -331,6 +333,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [messageReactions, setMessageReactions] = useState<Record<string, string[]>>({});
   const [pickerTarget, setPickerTarget] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const roomId = id ?? '';
   const isNewConversation = roomId.startsWith('new_');
@@ -371,6 +374,7 @@ export default function ChatScreen() {
             text: m.content,
             timestamp: m.created_at,
             read: m.is_read,
+            imageUrl: m.image_url ?? undefined,
           })));
 
           console.log('Notification cleared by: [id].tsx loadChat auto-mark-read room=', roomId);
@@ -412,6 +416,7 @@ export default function ChatScreen() {
           text: msg.content,
           timestamp: msg.created_at,
           read: msg.is_read,
+          imageUrl: msg.image_url ?? undefined,
         };
         setMessages(prev => {
           if (prev.some(m => m.id === newMsg.id)) return prev;
@@ -514,13 +519,9 @@ export default function ChatScreen() {
         const localUri = asset.uri;
         const base64 = asset.base64 ?? undefined;
         if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-        // ユーザー操作時に通知音用 AudioContext をウォームアップ
         primeMessageNotificationSound().catch(() => {});
 
         const actualRoomId = getActualRoomId();
-
-        // Storage RLS で要求される認証ユーザーIDを必ず使用する
         const { data: { user } } = await supabase.auth.getUser();
         const authUserId = user?.id;
         if (!authUserId) {
@@ -528,11 +529,16 @@ export default function ChatScreen() {
           return;
         }
 
-        const result = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
-        if ('url' in result) {
-          await sendContent(encodeImageContent(result.url));
-        } else {
-          Alert.alert(t('error', language), result.error);
+        setIsUploadingImage(true);
+        try {
+          const uploadResult = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
+          if ('url' in uploadResult) {
+            await sendContent(encodeImageContent(uploadResult.url));
+          } else {
+            Alert.alert(t('error', language), uploadResult.error);
+          }
+        } finally {
+          setIsUploadingImage(false);
         }
       }
     } catch (e) {
@@ -662,8 +668,13 @@ export default function ChatScreen() {
             <Pressable
               onPress={handlePickImage}
               style={[styles.mediaBtn, { backgroundColor: colors.goldMuted, borderColor: colors.gold }]}
+              disabled={isUploadingImage}
             >
-              <ImageIcon size={22} color={colors.gold} />
+              {isUploadingImage ? (
+                <ActivityIndicator size="small" color={colors.gold} />
+              ) : (
+                <ImageIcon size={22} color={colors.gold} />
+              )}
             </Pressable>
 
             <TextInput
