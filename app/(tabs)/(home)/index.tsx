@@ -237,7 +237,14 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable onPress={() => router.push('/(tabs)/notifications' as any)} style={styles.headerIconBtn}>
-              <Bell size={20} color={colors.textPrimary} />
+              <View style={{ position: 'relative' }}>
+                <Bell size={20} color={colors.textPrimary} />
+                {unreadNotificationCount > 0 && (
+                  <View style={[styles.bellBadge, { backgroundColor: colors.red }]}>
+                    <Text style={styles.bellBadgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
+                  </View>
+                )}
+              </View>
             </Pressable>
             <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
               <SlidersHorizontal size={20} color={colors.textPrimary} />
@@ -327,6 +334,8 @@ function createStyles(colors: ThemeColors) {
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     headerIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' },
+    bellBadge: { position: 'absolute', top: -4, right: -4, borderRadius: 9, minWidth: 18, height: 18, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+    bellBadgeText: { fontSize: 10, fontWeight: '700', color: '#fff' },
     listContent: { paddingBottom: 100 },
     listHeader: { paddingTop: 4, marginBottom: 4 },
     locationBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 14 },

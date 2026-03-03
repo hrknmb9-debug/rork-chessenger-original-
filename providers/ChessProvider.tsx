@@ -1502,6 +1502,11 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     [notifications]
   );
 
+  const totalUnreadMessageCount = useMemo(
+    () => Object.values(unreadCountByUserId).reduce((sum, n) => sum + n, 0),
+    [unreadCountByUserId]
+  );
+
   const addTimelinePost = useCallback(async (content: string, type: TimelinePost['type'] = 'general', imageUrl?: string, templateType?: string, event?: TimelineEvent) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -1703,5 +1708,6 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     leaveEvent,
     fetchPlayerProfile,
     unreadCountByUserId,
+    totalUnreadMessageCount,
   };
 });

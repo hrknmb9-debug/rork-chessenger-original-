@@ -498,14 +498,24 @@ export default function ChatScreen() {
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
+      const { isImage, value: imageUrl } = decodeContent(content);
+      const payload = {
+        room_id: actualRoomId,
+        sender_id: currentUserId,
+        content,
+        is_read: false,
+        ...(isImage && imageUrl ? { image_url: imageUrl } : {}),
+      };
       const { data, error } = await supabase
         .from('messages')
-        .insert({ room_id: actualRoomId, sender_id: currentUserId, content, is_read: false })
+        .insert(payload)
         .select()
         .single();
 
       if (data && !error) {
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id } : m));
+      } else if (error) {
+        console.log('Chat: Send failed', error.message);
       }
     } catch (e) {
       console.log('Chat: Send failed', e);

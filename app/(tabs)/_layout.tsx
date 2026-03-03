@@ -1,13 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Search, Swords, User, Newspaper, MessageCircle, Bell } from 'lucide-react-native';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React from 'react';
 import { View, Text } from 'react-native';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
-import { useAuth } from '@/providers/AuthProvider';
 import { ThemeColors } from '@/constants/colors';
 import { t } from '@/utils/translations';
-import { supabase } from '@/utils/supabaseClient';
 
 function BadgeIcon({ children, count, colors }: { children: React.ReactNode; count: number; colors: ThemeColors }) {
   if (count <= 0) return <>{children}</>;
@@ -36,62 +34,7 @@ function BadgeIcon({ children, count, colors }: { children: React.ReactNode; cou
 
 export default function TabLayout() {
   const { colors } = useTheme();
-  const { pendingIncoming, language, unreadNotificationCount } = useChess();
-  const { user } = useAuth();
-  const [unreadMessageCount, setUnreadMessageCount] = useState<number>(0);
-
-  useEffect(() => {
-    if (!user?.id || user.id === 'me') return;
-
-    const fetchUnread = async (caller: string) => {
-      console.log('Notification cleared by: fetchUnread called from', caller);
-      try {
-        const { count, error } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .ilike('room_id', `%${user.id}%`)
-          .neq('sender_id', user.id)
-          .eq('is_read', false);
-
-        if (!error && count !== null) {
-          console.log('TabLayout: fetchUnread result =', count, '(caller:', caller, ')');
-          setUnreadMessageCount(count);
-        }
-      } catch (e) {
-        console.log('TabLayout: Failed to fetch unread count', e);
-      }
-    };
-    fetchUnread('initial-login');
-
-    const channel = supabase
-      .channel('unread-messages-badge')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      }, (payload) => {
-        const msg = payload.new as { room_id: string; sender_id: string };
-        if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
-          fetchUnread('realtime-INSERT');
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'messages',
-      }, (payload) => {
-        const msg = payload.new as { room_id: string; sender_id: string; is_read: boolean };
-        if (msg.room_id.includes(user.id) && msg.sender_id !== user.id) {
-          console.log('Notification cleared by: realtime-UPDATE is_read=', msg.is_read, 'room=', msg.room_id);
-          fetchUnread('realtime-UPDATE');
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
+  const { pendingIncoming, language, unreadNotificationCount, totalUnreadMessageCount } = useChess();
 
   const matchBadge = pendingIncoming.length;
 
@@ -135,7 +78,7 @@ export default function TabLayout() {
         options={{
           title: t('tab_messages', language),
           tabBarIcon: ({ color, size }) => (
-            <BadgeIcon count={unreadMessageCount} colors={colors}>
+            <BadgeIcon count={totalUnreadMessageCount} colors={colors}>
               <MessageCircle size={size} color={color} />
             </BadgeIcon>
           ),
