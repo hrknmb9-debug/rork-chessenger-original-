@@ -1687,8 +1687,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       return;
     }
 
+    const tempId = `tp${Date.now()}`;
+
     const newPost: TimelinePost = {
-      id: `tp${Date.now()}`,
+      id: tempId,
       author: { ...profile, distance: 0 },
       type,
       content,
@@ -1717,7 +1719,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
         if (insertedPost) {
           setTimelinePosts(prev =>
-            prev.map(p => p.id === newPost.id ? { ...p, id: insertedPost.id } : p)
+            prev.map(p => p.id === tempId ? { ...p, id: insertedPost.id } : p)
           );
         }
 
@@ -1742,6 +1744,20 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             console.log('Event insert error:', eventError.message);
           } else if (insertedEvent) {
             console.log('Event synced to Supabase, id:', insertedEvent.id);
+            setTimelinePosts(prev =>
+              prev.map(p => {
+                if (p.id !== insertedPost.id || !p.event) return p;
+                return {
+                  ...p,
+                  event: {
+                    ...p.event,
+                    id: insertedEvent.id as string,
+                    createdAt: (insertedEvent.created_at as string) ?? p.event.createdAt,
+                    deadlineAt: (insertedEvent.deadline_at as string | null) ?? p.event.deadlineAt,
+                  },
+                };
+              })
+            );
           }
         }
       }
@@ -1778,7 +1794,22 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
     try {
       const postForDb = timelinePosts.find(p => p.id === postId);
-      const eventId = postForDb?.event?.id ?? postId;
+
+      let eventId = postForDb?.event?.id;
+      if (!eventId) {
+        const { data: evRow } = await supabase
+          .from('events')
+          .select('id')
+          .eq('post_id', postId)
+          .maybeSingle();
+        eventId = evRow?.id as string | undefined;
+      }
+
+      if (!eventId) {
+        console.log('Event join skipped: event id not found for post', postId);
+        return;
+      }
+
       await supabase.from('event_participants').insert({
         event_id: eventId,
         user_id: userId,
@@ -1836,7 +1867,22 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
     try {
       const post = timelinePosts.find(p => p.id === postId);
-      const eventId = post?.event?.id ?? postId;
+
+      let eventId = post?.event?.id;
+      if (!eventId) {
+        const { data: evRow } = await supabase
+          .from('events')
+          .select('id')
+          .eq('post_id', postId)
+          .maybeSingle();
+        eventId = evRow?.id as string | undefined;
+      }
+
+      if (!eventId) {
+        console.log('Event leave skipped: event id not found for post', postId);
+        return;
+      }
+
       await supabase.from('event_participants')
         .delete()
         .eq('event_id', eventId)
