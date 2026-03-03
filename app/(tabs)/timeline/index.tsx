@@ -13,6 +13,7 @@ import {
   Modal,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeImage } from '@/components/SafeImage';
@@ -35,6 +36,7 @@ import {
   Users,
   CornerDownRight,
   Hourglass,
+  Trash2,
 } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -98,6 +100,8 @@ function PostCard({
   onComment,
   onAuthorPress,
   onImagePress,
+  onDelete,
+  isOwnPost,
   language,
 }: {
   post: TimelinePost;
@@ -105,6 +109,8 @@ function PostCard({
   onComment: (id: string, text: string, parentId?: string) => void;
   onAuthorPress: (id: string) => void;
   onImagePress?: (url: string) => void;
+  onDelete?: (id: string) => void;
+  isOwnPost: boolean;
   language: string;
 }) {
   const { colors } = useTheme();
@@ -211,12 +217,32 @@ function PostCard({
             <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 2 }}>{getTimeAgo(post.createdAt, language)}</Text>
           </View>
         </Pressable>
-        {post.type !== 'general' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: getTypeBg(), marginLeft: 8 }}>
-            {getTypeIcon()}
-            <Text style={{ fontSize: 10, fontWeight: '600' as const, color: getTypeColor() }}>{getTypeLabel()}</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {post.type !== 'general' && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: getTypeBg(), marginLeft: 8 }}>
+              {getTypeIcon()}
+              <Text style={{ fontSize: 10, fontWeight: '600' as const, color: getTypeColor() }}>{getTypeLabel()}</Text>
+            </View>
+          )}
+          {isOwnPost && onDelete && (
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                Alert.alert(
+                  language === 'ja' ? '削除の確認' : 'Delete post',
+                  language === 'ja' ? '本当にこの投稿を削除しますか？' : 'Are you sure you want to delete this post?',
+                  [
+                    { text: language === 'ja' ? 'キャンセル' : 'Cancel', style: 'cancel' },
+                    { text: language === 'ja' ? '削除' : 'Delete', style: 'destructive', onPress: () => onDelete(post.id) },
+                  ]
+                );
+              }}
+              style={{ padding: 6 }}
+            >
+              <Trash2 size={18} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 12 }}>{contentText}</Text>
@@ -354,7 +380,7 @@ function PostCard({
 export default function TimelineScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { timelinePosts, toggleLike, addComment, addTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId } = useChess();
+  const { timelinePosts, toggleLike, addComment, addTimelinePost, deleteTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId } = useChess();
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'events'>('all');
   const [newPostText, setNewPostText] = useState<string>('');
@@ -571,10 +597,12 @@ export default function TimelineScreen() {
         onComment={handleComment}
         onAuthorPress={handleAuthorPress}
         onImagePress={setExpandedImageUrl}
+        onDelete={deleteTimelinePost}
+        isOwnPost={item.author.id === currentUserId || item.author.id === 'me'}
         language={language}
       />
     ),
-    [toggleLike, handleComment, handleAuthorPress, language]
+    [toggleLike, handleComment, handleAuthorPress, deleteTimelinePost, currentUserId, language]
   );
 
   const keyExtractor = useCallback((item: TimelinePost) => item.id, []);

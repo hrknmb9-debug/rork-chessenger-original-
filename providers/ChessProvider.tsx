@@ -348,6 +348,29 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     });
   }, [userLocation]);
 
+  const RECENT_OWN_POST_WINDOW_MS = 3 * 60 * 1000;
+
+  const mergeRecentOwnPosts = useCallback((
+    userId: string | null,
+    built: TimelinePost[],
+    prev: TimelinePost[],
+    windowMs: number
+  ): TimelinePost[] => {
+    if (!userId || userId === 'me') return built;
+    const builtIds = new Set(built.map(p => p.id));
+    const cutoff = Date.now() - windowMs;
+    const kept = prev.filter(p => {
+      const authorId = p.author?.id;
+      if (authorId !== userId && authorId !== 'me') return false;
+      if (builtIds.has(p.id)) return false;
+      const created = new Date(p.createdAt).getTime();
+      return created >= cutoff;
+    });
+    const merged = [...kept, ...built];
+    merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return merged;
+  }, []);
+
   useEffect(() => {
     const loadSupabaseData = async () => {
       try {
@@ -559,10 +582,15 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             eventParticipantsData,
             blockedIds
           );
-          setTimelinePosts(built);
+          setTimelinePosts(prev =>
+            mergeRecentOwnPosts(userId, built, prev, RECENT_OWN_POST_WINDOW_MS)
+          );
           console.log('ChessProvider: Loaded', built.length, 'timeline posts from Supabase');
         } else {
-          console.log('ChessProvider: No posts found in Supabase');
+          setTimelinePosts(prev => {
+            const merged = mergeRecentOwnPosts(userId, [], prev, RECENT_OWN_POST_WINDOW_MS);
+            return merged.length > 0 ? merged : [];
+          });
         }
 
         if (userId) {
@@ -598,7 +626,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       }
     };
     loadSupabaseData();
-  }, [userLocation, authReady, fetchPlayerProfile, buildTimelinePosts]);
+  }, [userLocation, authReady, fetchPlayerProfile, buildTimelinePosts, mergeRecentOwnPosts]);
 
   const reloadProfile = useCallback(async () => {
     try {
@@ -876,13 +904,44 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         console.log('Realtime: Notifications subscription status:', status);
       }) : null;
 
+    const postsChannel = currentUserId ? supabase
+      .channel('posts-realtime')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'posts',
+      }, (payload) => {
+        const row = payload.new as SupabasePost;
+        if (row.user_id !== currentUserId) return;
+        setTimelinePosts(prev => {
+          if (prev.some(p => p.id === row.id)) return prev;
+          const author = { ...profile, distance: 0 };
+          const newPost: TimelinePost = {
+            id: row.id,
+            author,
+            type: (row.type as TimelinePost['type']) ?? 'general',
+            content: row.content,
+            imageUrl: row.image_url ?? undefined,
+            templateType: row.template_type ?? undefined,
+            createdAt: row.created_at ?? new Date().toISOString(),
+            likes: [],
+            comments: [],
+          };
+          return [newPost, ...prev];
+        });
+      })
+      .subscribe((status) => {
+        console.log('Realtime: Posts subscription status:', status);
+      }) : null;
+
     return () => {
       supabase.removeChannel(messagesChannel);
       supabase.removeChannel(matchesChannel);
       supabase.removeChannel(profilesChannel);
       if (notificationsChannel) supabase.removeChannel(notificationsChannel);
+      if (postsChannel) supabase.removeChannel(postsChannel);
     };
-  }, [userLocation, currentUserId, fetchPlayerProfile, fetchUnreadCountByUser]);
+  }, [userLocation, currentUserId, fetchPlayerProfile, fetchUnreadCountByUser, profile]);
 
   const players = useMemo(() => {
     return supabasePlayers.filter(p => !blockedUsers.includes(p.id));
@@ -968,7 +1027,9 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           epData,
           blockedUsers
         );
-        setTimelinePosts(built);
+        setTimelinePosts(prev =>
+          mergeRecentOwnPosts(user?.id ?? null, built, prev, RECENT_OWN_POST_WINDOW_MS)
+        );
         console.log('ChessProvider: Timeline refreshed with', built.length, 'posts');
 
         if (currentUserId) {
@@ -994,12 +1055,15 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           }
         }
       } else {
-        setTimelinePosts([]);
+        setTimelinePosts(prev => {
+          const merged = mergeRecentOwnPosts(user?.id ?? null, [], prev, RECENT_OWN_POST_WINDOW_MS);
+          return merged.length > 0 ? merged : [];
+        });
       }
     } catch (e) {
       console.log('ChessProvider: Timeline refresh failed', e);
     }
-  }, [blockedUsers, buildTimelinePosts, currentUserId, notifications]);
+  }, [blockedUsers, buildTimelinePosts, currentUserId, notifications, mergeRecentOwnPosts]);
 
   const changeLanguage = useCallback(async (lang: Language) => {
     setLanguage(lang);
@@ -1686,7 +1750,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
 
     console.log('New timeline post added');
-  }, [profile, refreshTimeline]);
+  }, [profile]);
 
   const joinEvent = useCallback(async (postId: string) => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1783,6 +1847,31 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId, timelinePosts]);
 
+  const deleteTimelinePost = useCallback(async (postId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setTimelinePosts(prev => prev.filter(p => p.id !== postId));
+
+    try {
+      const { data: eventsForPost } = await supabase
+        .from('events')
+        .select('id')
+        .eq('post_id', postId);
+      const eventIds = (eventsForPost ?? []).map((e: { id: string }) => e.id);
+      if (eventIds.length > 0) {
+        await supabase.from('event_participants').delete().in('event_id', eventIds);
+      }
+      await supabase.from('events').delete().eq('post_id', postId);
+      await supabase.from('post_likes').delete().eq('post_id', postId);
+      await supabase.from('comments').delete().eq('post_id', postId);
+      await supabase.from('posts').delete().eq('id', postId);
+      console.log('ChessProvider: Post deleted from Supabase', postId);
+    } catch (e) {
+      console.log('ChessProvider: Post delete failed', e);
+    }
+  }, []);
+
   const activeMatches = useMemo(
     () => matches.filter(m => m.status === 'accepted'),
     [matches]
@@ -1853,6 +1942,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     reloadProfile,
     joinEvent,
     leaveEvent,
+    deleteTimelinePost,
     fetchPlayerProfile,
     unreadCountByUserId,
     totalUnreadMessageCount,
