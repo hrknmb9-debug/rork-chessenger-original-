@@ -220,7 +220,7 @@ function MessageBubble({
   reactions: string[];
 }) {
   const { isImage, value } = decodeMessageContent(item.text);
-  const imageUrl = value || item.imageUrl;
+  const imageUrl = isImage ? (value || item.imageUrl ?? undefined) : (item.imageUrl ?? undefined);
   const timeStr = getTimeAgo(item.timestamp, language);
 
   const reactionGroups = useMemo(() => {
