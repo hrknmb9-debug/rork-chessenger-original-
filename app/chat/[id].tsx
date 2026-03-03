@@ -22,6 +22,7 @@ import { useChess } from '@/providers/ChessProvider';
 import { Message, Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { t, getTimeAgo } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 const IMG_PREFIX = '__IMG__';
 
@@ -375,7 +376,7 @@ export default function ChatScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: '' }} />
+        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.back()} /> }} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
@@ -386,7 +387,7 @@ export default function ChatScreen() {
   if (!chatPlayer) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: '' }} />
+        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.back()} /> }} />
         <View style={styles.center}>
           <Text style={styles.notFoundText}>
             {t('conversation_not_found', language)}
@@ -402,6 +403,7 @@ export default function ChatScreen() {
         options={{
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerTitle: () => (
             <Pressable
               onPress={() => router.push(('/player/' + chatPlayer.id) as any)}

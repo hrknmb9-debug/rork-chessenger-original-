@@ -41,6 +41,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useLocation } from '@/providers/LocationProvider';
 import { t } from '@/utils/translations';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { BackNavButton } from '@/components/BackNavButton';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -111,6 +112,7 @@ export default function SettingsScreen() {
           title: t('settings_page', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
         }}
       />
       <ScrollView

@@ -1,16 +1,23 @@
-import { Link, Stack } from "expo-router";
+import { Link, Stack, useRouter } from "expo-router";
 import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { ThemeColors } from "@/constants/colors";
 import { useTheme } from "@/providers/ThemeProvider";
+import { BackNavButton } from "@/components/BackNavButton";
 
 export default function NotFoundScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+  const router = useRouter();
 
   return (
     <>
-      <Stack.Screen options={{ title: "ページが見つかりません" }} />
+      <Stack.Screen
+        options={{
+          title: "ページが見つかりません",
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
+        }}
+      />
       <View style={styles.container}>
         <Text style={styles.icon}>♟</Text>
         <Text style={styles.title}>ページが見つかりません</Text>

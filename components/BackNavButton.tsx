@@ -24,36 +24,40 @@ export function BackNavButton({ onPress, floating = false }: BackNavButtonProps)
   const content = (
     <Pressable
       onPress={handlePress}
-      style={({ pressed }) => [styles.touchable, pressed && styles.touchablePressed]}
-      hitSlop={12}
+      style={({ pressed }) => [
+        styles.touchable,
+        pressed && styles.touchablePressed,
+      ]}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      accessibilityRole="button"
+      accessibilityLabel="戻る"
     >
-      <ArrowLeft size={22} color={colors.textPrimary} strokeWidth={2.2} />
+      <ArrowLeft size={24} color={colors.textPrimary} strokeWidth={2.5} />
     </Pressable>
   );
 
   if (floating) {
-    const blurContent = (
-      <BlurView intensity={72} tint={colors.background === '#0B140E' ? 'dark' : 'light'} style={styles.glass}>
-        {content}
-      </BlurView>
-    );
+    const glassStyle = [styles.glass, colors.background === '#0B140E' ? styles.glassDark : styles.glassLight];
     return (
       <View style={styles.wrapper}>
         {Platform.OS === 'web' ? (
-          <View style={[styles.glass, styles.glassFallback]}>{content}</View>
+          <View style={[styles.glass, styles.glassWeb]}>{content}</View>
         ) : (
-          blurContent
+          <BlurView intensity={80} tint={colors.background === '#0B140E' ? 'dark' : 'light'} style={glassStyle}>
+            {content}
+          </BlurView>
         )}
       </View>
     );
   }
 
+  const inlineGlass = [styles.glassInline, colors.background === '#0B140E' ? styles.glassInlineDark : styles.glassInlineLight];
   return (
     <View style={styles.inlineWrapper}>
       {Platform.OS === 'web' ? (
-        <View style={[styles.glassInline, styles.glassFallbackInline]}>{content}</View>
+        <View style={[styles.glassInline, styles.glassInlineWeb]}>{content}</View>
       ) : (
-        <BlurView intensity={48} tint={colors.background === '#0B140E' ? 'dark' : 'light'} style={styles.glassInline}>
+        <BlurView intensity={56} tint={colors.background === '#0B140E' ? 'dark' : 'light'} style={inlineGlass}>
           {content}
         </BlurView>
       )}
@@ -62,60 +66,73 @@ export function BackNavButton({ onPress, floating = false }: BackNavButtonProps)
 }
 
 function createStyles(colors: ThemeColors, floating: boolean) {
-  const glassBg = colors.background === '#0B140E'
-    ? 'rgba(20, 30, 24, 0.75)'
-    : 'rgba(255, 255, 255, 0.72)';
-  const border = colors.cardBorder + '88';
+  const isDark = colors.background === '#0B140E';
+  const borderColor = isDark ? 'rgba(34, 56, 42, 0.9)' : 'rgba(212, 226, 212, 0.9)';
+  const webBg = isDark ? 'rgba(28, 46, 34, 0.92)' : 'rgba(255, 255, 255, 0.88)';
+  const webBgInline = isDark ? 'rgba(28, 46, 34, 0.85)' : 'rgba(255, 255, 255, 0.82)';
+
   return StyleSheet.create({
     wrapper: {
       position: 'absolute',
       top: Platform.OS === 'ios' ? 56 : 48,
       left: 16,
       zIndex: 100,
-      borderRadius: 14,
+      borderRadius: 16,
       overflow: 'hidden',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.12,
-      shadowRadius: 8,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 12,
+      elevation: 6,
     },
     glass: {
-      borderRadius: 14,
+      borderRadius: 16,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: border,
+      borderColor,
     },
-    glassFallback: {
-      backgroundColor: glassBg,
+    glassLight: {
+      borderColor: 'rgba(212, 226, 212, 0.6)',
+    },
+    glassDark: {
+      borderColor: 'rgba(34, 56, 42, 0.7)',
+    },
+    glassWeb: {
+      backgroundColor: webBg,
     },
     touchable: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       alignItems: 'center',
       justifyContent: 'center',
     },
     touchablePressed: {
-      opacity: 0.85,
+      opacity: 0.78,
     },
     inlineWrapper: {
-      marginLeft: 4,
-      borderRadius: 12,
+      marginLeft: 8,
+      borderRadius: 14,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: border,
+      borderColor,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 4,
-      elevation: 2,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 6,
+      elevation: 3,
     },
     glassInline: {
-      borderRadius: 12,
+      borderRadius: 14,
       overflow: 'hidden',
     },
-    glassFallbackInline: {
-      backgroundColor: glassBg,
+    glassInlineLight: {
+      borderColor: 'rgba(212, 226, 212, 0.5)',
+    },
+    glassInlineDark: {
+      borderColor: 'rgba(34, 56, 42, 0.6)',
+    },
+    glassInlineWeb: {
+      backgroundColor: webBgInline,
     },
   });
 }

@@ -18,6 +18,7 @@ import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { t } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 export default function ChangePasswordScreen() {
   const { colors } = useTheme();
@@ -77,6 +78,7 @@ export default function ChangePasswordScreen() {
           title: t('change_password', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
         }}
       />
       <KeyboardAvoidingView

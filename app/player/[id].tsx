@@ -41,6 +41,7 @@ import {
 } from '@/utils/helpers';
 import { t, getCountryFlag, getCountryName } from '@/utils/translations';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { BackNavButton } from '@/components/BackNavButton';
 import { PlayStyle } from '@/types';
 
 const TIME_CONTROLS = ['5+0', '10+0', '15+10', '30+0', '60+30'];
@@ -142,7 +143,12 @@ export default function PlayerDetailScreen() {
   if (!player) {
     return (
       <View style={styles.errorContainer}>
-        <Stack.Screen options={{ title: t('error', language) }} />
+        <Stack.Screen
+          options={{
+            title: t('error', language),
+            headerLeft: () => <BackNavButton onPress={() => router.back()} />,
+          }}
+        />
         <Text style={styles.errorText}>{t('player_not_found', language)}</Text>
       </View>
     );
@@ -169,6 +175,7 @@ export default function PlayerDetailScreen() {
           title: player.name,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerRight: () => (
             <View style={styles.headerRight}>
               <Pressable onPress={handleBlockToggle} style={styles.headerBlockBtn}>

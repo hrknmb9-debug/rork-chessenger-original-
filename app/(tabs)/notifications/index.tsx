@@ -7,6 +7,7 @@ import { useChess } from '@/providers/ChessProvider';
 import { ThemeColors } from '@/constants/colors';
 import { AppNotification } from '@/types';
 import { t } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
@@ -30,6 +31,7 @@ export default function NotificationsScreen() {
           title: t('notifications', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerRight: () =>
             notifications.length > 0 ? (
               <Pressable onPress={markAllNotificationsRead} style={styles.clearBtn}>

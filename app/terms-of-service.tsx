@@ -5,12 +5,13 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { FileText } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { t } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 const SECTIONS = [
   { titleKey: 'terms_section_1_title', contentKey: 'terms_section_1' },
@@ -26,6 +27,7 @@ export default function TermsOfServiceScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { language } = useChess();
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -34,6 +36,7 @@ export default function TermsOfServiceScreen() {
           title: t('terms_title', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
         }}
       />
       <ScrollView

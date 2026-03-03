@@ -19,6 +19,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { t } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 export default function ChangeEmailScreen() {
   const { colors } = useTheme();
@@ -74,6 +75,7 @@ export default function ChangeEmailScreen() {
           title: t('change_email', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
         }}
       />
       <KeyboardAvoidingView

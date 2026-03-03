@@ -8,13 +8,14 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { HelpCircle, ChevronDown, ChevronUp, Mail, MessageCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { t } from '@/utils/translations';
+import { BackNavButton } from '@/components/BackNavButton';
 
 interface FAQItem {
   questionKey: string;
@@ -63,6 +64,7 @@ export default function HelpSupportScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { language } = useChess();
+  const router = useRouter();
 
   const handleEmailPress = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -81,6 +83,7 @@ export default function HelpSupportScreen() {
           title: t('help_support_title', language),
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
+          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
         }}
       />
       <ScrollView

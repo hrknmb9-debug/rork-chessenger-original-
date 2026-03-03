@@ -84,7 +84,12 @@ export default function RateMatchScreen() {
   if (!match) {
     return (
       <View style={styles.errorContainer}>
-        <Stack.Screen options={{ title: t('error', language) }} />
+        <Stack.Screen
+          options={{
+            title: t('error', language),
+            headerLeft: () => <BackNavButton onPress={() => router.back()} />,
+          }}
+        />
         <Text style={styles.errorText}>{t('match_not_found', language)}</Text>
       </View>
     );
