@@ -29,7 +29,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           id: userId,
           email: profileData.email ?? email,
           name: profileData.name ?? fallbackName,
-          avatar: profileData.avatar ?? fallbackAvatar,
+          avatar: profileData.avatar_url ?? fallbackAvatar,
           isLoggedIn: true,
         };
       } else {
@@ -65,7 +65,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         id: userId,
         name,
         email,
-        avatar,
+        avatar_url: avatar,
         rating: 0,
         last_seen: new Date().toISOString(),
         ...extraData,
@@ -284,7 +284,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           id: data.user.id,
           name: trimmedName,
           email: data.user.email ?? email,
-          avatar: defaultAvatar,
+          avatar_url: defaultAvatar,
           rating: computedRating,
           bio: profileData?.bio ?? '',
           skill_level: profileData?.skillLevel ?? 'beginner',
@@ -385,7 +385,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       const supabaseUpdates: Record<string, unknown> = { id: user.id };
       if (updates.name !== undefined) supabaseUpdates.name = updates.name;
-      if (updates.avatar !== undefined) supabaseUpdates.avatar = updates.avatar;
+      if (updates.avatar !== undefined) supabaseUpdates.avatar_url = updates.avatar;
 
       if (Object.keys(supabaseUpdates).length > 1) {
         const { error } = await supabaseNoAuth.from('profiles').upsert(supabaseUpdates);

@@ -94,34 +94,47 @@ export default function EditProfileScreen() {
         console.log('Avatar upload: fetch failed', response.status);
         return null;
       }
-      const blob = await response.blob();
 
-      // Always store as jpg to keep filePath predictable
-      const fileExt = uri.includes('.png') ? 'png' : 'jpg';
-      const filePath = user.id + '/avatar.' + fileExt;
+      const arrayBuffer = await response.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        console.log('Avatar upload: Fetched image is empty (0 bytes)');
+        return null;
+      }
+
+      // Always store as jpg/png to keep filePath predictable
+      const fileExt = uri.toLowerCase().includes('.png') ? 'png' : 'jpg';
+      const filePath = `${user.id}/avatar.${fileExt}`;
       const contentType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
 
       const { error: uploadError } = await supabaseNoAuth.storage
         .from('avatars')
-        .upload(filePath, blob, { cacheControl: '3600', upsert: true, contentType });
+        .upload(filePath, arrayBuffer, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType,
+        });
 
       if (uploadError) {
         console.log('Avatar upload: Storage error', uploadError.message);
         return null;
       }
 
-      console.log('Avatar upload: Success, filePath:', filePath);
+      const { data: publicUrlData } = supabaseNoAuth.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+      const cleanBaseUrl = (publicUrlData.publicUrl ?? '').trim();
+      const publicUrl = cleanBaseUrl + '?t=' + Date.now();
+      console.log('Avatar upload: Success, public URL:', publicUrl);
 
-      // Save only the storage path to DB — resolveAvatarUrl will construct the full URL
       const { error: upsertError } = await supabaseNoAuth
         .from('profiles')
-        .upsert({ id: user.id, avatar: filePath });
+        .upsert({ id: user.id, avatar_url: publicUrl });
 
       if (upsertError) {
         console.log('Avatar upload: Profile upsert error', upsertError.message);
       }
 
-      return filePath;
+      return publicUrl;
     } catch (e) {
       console.log('Avatar upload: Exception', e);
       return null;

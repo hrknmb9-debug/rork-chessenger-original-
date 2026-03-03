@@ -20,7 +20,7 @@ interface SupabaseProfile {
   id: string;
   name?: string;
   email?: string;
-  avatar?: string;
+  avatar_url?: string;
   bio?: string;
   rating?: number;
   chess_com_rating?: number | null;
@@ -96,7 +96,7 @@ function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, use
   return {
     id: profile.id,
     name: profile.name ?? 'Unknown',
-    avatar: resolveAvatarUrl(profile.avatar, profile.name),
+    avatar: resolveAvatarUrl(profile.avatar_url, profile.name),
     rating: profile.rating ?? 0,
     chessComRating: profile.chess_com_rating ?? null,
     lichessRating: profile.lichess_rating ?? null,
@@ -379,7 +379,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
               id: userId,
               name: profileData.name ?? '',
               email: profileData.email ?? '',
-              avatar: resolveAvatarUrl(profileData.avatar, profileData.name),
+              avatar: resolveAvatarUrl(profileData.avatar_url, profileData.name),
               bio: profileData.bio ?? '',
               bioEn: '',
               rating: profileData.rating ?? 0,
@@ -606,7 +606,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           id: user.id,
           name: profileData.name ?? user.user_metadata?.username ?? 'Player',
           email: profileData.email ?? user.email ?? '',
-          avatar: resolveAvatarUrl(profileData.avatar, profileData.name),
+          avatar: resolveAvatarUrl(profileData.avatar_url, profileData.name),
           bio: profileData.bio ?? '',
           bioEn: '',
           rating: profileData.rating ?? 0,
@@ -750,7 +750,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
               wins: newProfile.wins ?? prev.wins,
               losses: newProfile.losses ?? prev.losses,
               draws: newProfile.draws ?? prev.draws,
-              avatar: newProfile.avatar ? resolveAvatarUrl(newProfile.avatar, newProfile.name) : prev.avatar,
+              avatar: newProfile.avatar_url ? resolveAvatarUrl(newProfile.avatar_url, newProfile.name) : prev.avatar,
             }));
           }
 
@@ -1050,7 +1050,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       if (updates.name !== undefined) supabaseUpdates.name = updates.name;
       if (updates.bio !== undefined) supabaseUpdates.bio = updates.bio;
       if (updates.location !== undefined) supabaseUpdates.location = updates.location;
-      if (updates.avatar !== undefined) supabaseUpdates.avatar = updates.avatar;
+      if (updates.avatar !== undefined) supabaseUpdates.avatar_url = updates.avatar;
       if (updates.skillLevel !== undefined) supabaseUpdates.skill_level = updates.skillLevel;
       if (updates.preferredTimeControl !== undefined) supabaseUpdates.preferred_time_control = updates.preferredTimeControl;
       if (updates.chessComRating !== undefined) supabaseUpdates.chess_com_rating = updates.chessComRating;
@@ -1091,7 +1091,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         if (updates.name !== undefined) payload.name = updates.name;
         if (updates.bio !== undefined) payload.bio = updates.bio;
         if (updates.location !== undefined) payload.location = updates.location;
-        if (updates.avatar !== undefined) payload.avatar = updates.avatar;
+        if (updates.avatar !== undefined) payload.avatar_url = updates.avatar;
         if (updates.skillLevel !== undefined) payload.skill_level = updates.skillLevel;
         if (updates.preferredTimeControl !== undefined) payload.preferred_time_control = updates.preferredTimeControl;
         if (updates.chessComRating !== undefined) payload.chess_com_rating = updates.chessComRating;
