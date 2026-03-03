@@ -1,6 +1,9 @@
--- RLS for message-images bucket.
--- 【必須】Supabase Dashboard: Storage → New bucket → id: message-images, Public: ON で作成すること。
--- 公開でないと getPublicUrl() のURLが受信側で表示できない。
+-- message-images バケット作成 + RLS
+-- バケットが無いとアップロードできないため、マイグレーションで自動作成する。
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('message-images', 'message-images', true)
+ON CONFLICT (id) DO UPDATE SET public = true, name = EXCLUDED.name;
 
 -- Authenticated users: INSERT (upload) only into their own folder: userId/roomId/filename
 -- Path format: ${userId}/${roomId}/${Date.now()}.${fileExt}
