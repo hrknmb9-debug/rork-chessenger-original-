@@ -79,7 +79,7 @@ function buildListItems(messages: Message[]): ListItem[] {
     const dateKey = new Date(msg.timestamp).toDateString();
 
     if (dateKey !== lastDateKey) {
-      items.push({ kind: 'date', id: `date_${dateKey}`, label: formatDateLabel(msg.timestamp) });
+      items.push({ kind: 'date', id: `date_${dateKey}_${i}`, label: formatDateLabel(msg.timestamp) });
       lastDateKey = dateKey;
     }
 
@@ -91,7 +91,8 @@ function buildListItems(messages: Message[]): ListItem[] {
     const isFirst = !prev || prev.senderId !== msg.senderId || prevKey !== dateKey;
     const isLast = !next || next.senderId !== msg.senderId || nextKey !== dateKey;
 
-    items.push({ kind: 'message', id: msg.id, msg, isFirst, isLast });
+    const messageId = (msg.id && String(msg.id).trim()) || `msg_${i}`;
+    items.push({ kind: 'message', id: messageId, msg, isFirst, isLast });
   }
 
   return items;
@@ -413,11 +414,12 @@ export default function ChatScreen() {
         filter: `room_id=eq.${roomId}`,
       }, async (payload) => {
         const msg = payload.new as SupabaseMessage;
+        if (msg.sender_id === currentUserId) return;
         const newMsg: Message = {
           id: msg.id,
           senderId: msg.sender_id,
           text: msg.content,
-          timestamp: msg.created_at,
+          timestamp: msg.created_at ?? new Date().toISOString(),
           read: msg.is_read,
           imageUrl: msg.image_url ?? undefined,
         };
@@ -666,7 +668,7 @@ export default function ChatScreen() {
           ref={flatListRef}
           data={listItems}
           renderItem={renderItem}
-          keyExtractor={item => item.id}
+          keyExtractor={(item, index) => (item.id && String(item.id).trim()) || `item_${index}`}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
