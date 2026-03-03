@@ -86,15 +86,22 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-/** ローカル画像を Supabase Storage にアップロードし、受信側でも表示できる公開URLを返す。RLS: bucket message-images, パス先頭は auth.jwt()->>'sub' と一致させること。 */
+/**
+ * 画像を Supabase Storage (message-images) にアップロードし、公開URLを返す。
+ * - RLS: パス先頭は auth.jwt()->>'sub' と一致させるため userId に認証ユーザーIDを渡すこと。
+ * - base64FromPicker: ネイティブでピッカーから base64 を渡すと確実にアップロードできる（fetch(ph://) 等が失敗するため）。
+ */
 async function uploadMessageImage(
   localUri: string,
   userId: string,
-  roomId: string
+  roomId: string,
+  base64FromPicker?: string
 ): Promise<string | null> {
   let arrayBuffer: ArrayBuffer | null = null;
   try {
-    if (Platform.OS === 'web') {
+    if (base64FromPicker && base64FromPicker.length > 0) {
+      arrayBuffer = base64ToArrayBuffer(base64FromPicker);
+    } else if (Platform.OS === 'web') {
       const response = await fetch(localUri);
       if (!response.ok) return null;
       arrayBuffer = await response.arrayBuffer();
@@ -103,7 +110,7 @@ async function uploadMessageImage(
         const res = await fetch(localUri);
         if (res.ok) arrayBuffer = await res.arrayBuffer();
       } catch {
-        // fetch が file:// 等で失敗する場合がある
+        // ネイティブで fetch が失敗する場合は base64FromPicker を渡すこと
       }
       if (!arrayBuffer) {
         try {
@@ -607,10 +614,13 @@ export default function ChatScreen() {
         quality: 0.8,
         allowsEditing: true,
         aspect: [4, 3],
+        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const localUri = result.assets[0].uri;
+        const asset = result.assets[0];
+        const localUri = asset.uri;
+        const base64 = asset.base64 ?? undefined;
         if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
         // ユーザー操作時に通知音用 AudioContext をウォームアップ
@@ -626,7 +636,7 @@ export default function ChatScreen() {
           return;
         }
 
-        const publicUrl = await uploadMessageImage(localUri, authUserId, actualRoomId);
+        const publicUrl = await uploadMessageImage(localUri, authUserId, actualRoomId, base64);
         if (publicUrl) {
           await sendContent(encodeImageContent(publicUrl));
         } else {
