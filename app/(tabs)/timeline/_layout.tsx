@@ -9,7 +9,7 @@ export default function TimelineLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.textPrimary,
-        headerBackTitle: '戻る',
+        headerBackTitle: ' ',
       }}
     >
       <Stack.Screen name="index" options={{ title: 'タイムライン' }} />

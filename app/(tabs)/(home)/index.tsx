@@ -236,7 +236,7 @@ export default function HomeScreen() {
             <Text style={styles.headerTitle}>Chessenger</Text>
           </View>
           <View style={styles.headerRight}>
-            <Pressable onPress={() => router.push('/notifications' as any)} style={styles.headerIconBtn}>
+            <Pressable onPress={() => router.push('/(tabs)/notifications' as any)} style={styles.headerIconBtn}>
               <Bell size={20} color={colors.textPrimary} />
             </Pressable>
             <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
