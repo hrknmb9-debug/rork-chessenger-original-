@@ -147,7 +147,7 @@ export interface MatchResultReport {
 
 export interface AppNotification {
   id: string;
-  type: 'match_request' | 'match_accepted' | 'match_declined' | 'result_report' | 'result_confirmed' | 'blocked' | 'new_message' | 'post_like' | 'post_comment' | 'post_reply' | 'event_join';
+  type: 'match_request' | 'match_accepted' | 'match_declined' | 'result_report' | 'result_confirmed' | 'blocked' | 'new_message' | 'post_like' | 'post_comment' | 'post_reply' | 'event_join' | 'event_full' | 'event_deadline_passed';
   title: string;
   message: string;
   createdAt: string;

@@ -6,7 +6,7 @@ import { useChess } from '@/providers/ChessProvider';
 import { AppNotification } from '@/types';
 import { getTimeAgo } from '@/utils/translations';
 
-const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join'] as const;
+const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();

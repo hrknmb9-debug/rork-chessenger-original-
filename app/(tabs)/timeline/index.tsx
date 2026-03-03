@@ -34,6 +34,7 @@ import {
   MapPin,
   Users,
   CornerDownRight,
+  Hourglass,
 } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -185,6 +186,21 @@ function PostCard({
     !!post.event &&
     ((!!post.event.deadlineAt && new Date(post.event.deadlineAt) <= new Date()) || !!post.event.isClosed);
 
+  const formatDeadlineDisplay = () => {
+    if (!post.event?.deadlineAt) return '';
+    const d = new Date(post.event.deadlineAt);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    if (language === 'ja') {
+      return `${m}月${day}日 ${hh}:${mm}`;
+    }
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[m - 1]} ${day}, ${hh}:${mm}`;
+  };
+
   return (
     <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -248,6 +264,16 @@ function PostCard({
                 {post.event.participants.length}/{post.event.maxParticipants} {t('participants', language)}
               </Text>
             </View>
+            {post.event.deadlineAt && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Hourglass size={13} color={colors.green} />
+                <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                  {language === 'ja'
+                    ? `募集締切: ${formatDeadlineDisplay()}`
+                    : `Deadline: ${formatDeadlineDisplay()}`}
+                </Text>
+              </View>
+            )}
           </View>
           {isEventClosed ? (
             <View style={{ alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }}>
@@ -350,7 +376,7 @@ export default function TimelineScreen() {
     return d;
   });
   const [eventDeadlineHour, setEventDeadlineHour] = useState<number>(23);
-  const [eventDeadlineMinute, setEventDeadlineMinute] = useState<number>(59);
+  const [eventDeadlineMinute, setEventDeadlineMinute] = useState<number>(45);
   const [showDeadlineDatePicker, setShowDeadlineDatePicker] = useState<boolean>(false);
   const [showDeadlineTimePicker, setShowDeadlineTimePicker] = useState<boolean>(false);
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
@@ -485,10 +511,11 @@ export default function TimelineScreen() {
       });
     } else {
       setEventDeadlineMinute(prev => {
-        const next = prev + delta;
-        if (next < 0) return 59;
-        if (next > 59) return 0;
-        return next;
+        const allowed = [0, 15, 30, 45];
+        const currentIndex = allowed.indexOf(prev);
+        const step = delta > 0 ? 1 : -1;
+        const nextIndex = (currentIndex + step + allowed.length) % allowed.length;
+        return allowed[nextIndex];
       });
     }
   }, []);

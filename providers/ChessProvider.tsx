@@ -970,13 +970,36 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         );
         setTimelinePosts(built);
         console.log('ChessProvider: Timeline refreshed with', built.length, 'posts');
+
+        if (currentUserId) {
+          const now = new Date();
+          const existingDeadlineNotifs = new Set(
+            notifications
+              .filter(n => n.type === 'event_deadline_passed' && n.relatedId)
+              .map(n => n.relatedId as string)
+          );
+          for (const post of built) {
+            if (post.type !== 'event' || !post.event) continue;
+            if (post.author.id !== currentUserId) continue;
+            if (!post.event.deadlineAt || post.event.isClosed) continue;
+            const deadline = new Date(post.event.deadlineAt);
+            if (deadline <= now && !existingDeadlineNotifs.has(post.id)) {
+              await supabase.from('notifications').insert({
+                user_id: currentUserId,
+                type: 'event_deadline_passed',
+                content: `イベント「${post.event.title}」の募集締切を過ぎました`,
+                related_id: post.id,
+              });
+            }
+          }
+        }
       } else {
         setTimelinePosts([]);
       }
     } catch (e) {
       console.log('ChessProvider: Timeline refresh failed', e);
     }
-  }, [blockedUsers, buildTimelinePosts]);
+  }, [blockedUsers, buildTimelinePosts, currentUserId, notifications]);
 
   const changeLanguage = useCallback(async (lang: Language) => {
     setLanguage(lang);
@@ -1576,7 +1599,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId]);
 
-  const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join'] as const;
+  const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
 
   const unreadNotificationCount = useMemo(
     () => notifications.filter(n => !n.read).length,
@@ -1697,7 +1720,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         user_id: userId,
       });
       console.log('Event join synced');
-      const { data: evRow } = await supabase.from('events').select('post_id').eq('id', eventId).single();
+      const { data: evRow } = await supabase.from('events').select('post_id, max_participants').eq('id', eventId).single();
       const postIdForOwner = evRow?.post_id ?? postId;
       const { data: postRow } = await supabase.from('posts').select('user_id').eq('id', postIdForOwner).single();
       const ownerId = postRow?.user_id;
@@ -1709,6 +1732,22 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           content: `${actorName}があなたのイベントに参加しました`,
           related_id: postIdForOwner,
         });
+
+        if (evRow?.max_participants) {
+          const { data: participants } = await supabase
+            .from('event_participants')
+            .select('user_id')
+            .eq('event_id', eventId);
+          const count = participants?.length ?? 0;
+          if (count >= (evRow.max_participants as number)) {
+            await supabase.from('notifications').insert({
+              user_id: ownerId,
+              type: 'event_full',
+              content: `イベント「${postForDb?.event?.title ?? ''}」が定員に達しました`,
+              related_id: postIdForOwner,
+            });
+          }
+        }
       }
     } catch (e) {
       console.log('Event join sync failed', e);
