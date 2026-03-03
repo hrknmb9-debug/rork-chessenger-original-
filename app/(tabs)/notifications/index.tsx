@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Bell, Clock, Swords, CheckCircle2, XCircle, AlertCircle, MessageCircle } from 'lucide-react-native';
@@ -14,6 +14,12 @@ export default function NotificationsScreen() {
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { notifications, language, markNotificationRead, markAllNotificationsRead } = useChess();
   const router = useRouter();
+
+  useEffect(() => {
+    if (notifications.length > 0) {
+      markAllNotificationsRead();
+    }
+  }, []);
 
   const handlePressItem = (item: AppNotification) => {
     if (!item.read) {
@@ -65,16 +71,14 @@ export default function NotificationsScreen() {
             >
               <View style={styles.itemIconWrap}>{renderIcon(item, colors)}</View>
               <View style={styles.itemBody}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemMessage} numberOfLines={2}>
-                  {item.message}
+                <Text style={styles.itemTitle}>{getNotificationPlayerName(item)}</Text>
+                <Text style={styles.itemMessage} numberOfLines={1}>
+                  {language === 'ja'
+                    ? `${getNotificationPlayerName(item)} から通知が届いています`
+                    : `You have a notification from ${getNotificationPlayerName(item)}`
+                  }
                 </Text>
-                <View style={styles.itemMetaRow}>
-                  <Clock size={12} color={colors.textMuted} />
-                  <Text style={styles.itemMetaText}>{item.createdAt}</Text>
-                </View>
               </View>
-              {!item.read && <View style={styles.unreadDot} />}
             </Pressable>
           )}
         />
@@ -100,6 +104,17 @@ function renderIcon(item: AppNotification, colors: ThemeColors) {
     default:
       return <Bell size={20} color={colors.textSecondary} />;
   }
+}
+
+function getNotificationPlayerName(item: AppNotification): string {
+  if (item.type === 'new_message' && item.message) {
+    const idx = item.message.indexOf(':');
+    if (idx > 0) {
+      return item.message.slice(0, idx);
+    }
+  }
+  if (item.message) return item.message;
+  return 'プレイヤー';
 }
 
 function createStyles(colors: ThemeColors) {

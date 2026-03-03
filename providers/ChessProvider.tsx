@@ -777,18 +777,18 @@ export const [ChessProvider, useChess] = createContextHook(() => {
                 return [match, ...prev];
               });
               console.log('Realtime: New incoming match added from', opponent.name);
-            });
 
-            const notif: AppNotification = {
-              id: `n_mr_${Date.now()}`,
-              type: 'match_request',
-              title: 'Match Request',
-              message: 'New match request received',
-              createdAt: new Date().toISOString(),
-              read: false,
-              relatedId: newMatch.id as string,
-            };
-            setNotifications(prev => [notif, ...prev]);
+              const notif: AppNotification = {
+                id: `n_mr_${Date.now()}`,
+                type: 'match_request',
+                title: 'Match Request',
+                message: opponent.name,
+                createdAt: new Date().toISOString(),
+                read: false,
+                relatedId: newMatch.id as string,
+              };
+              setNotifications(prev => [notif, ...prev]);
+            });
           }
         }
       })
@@ -1270,7 +1270,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       id: `n_${Date.now()}`,
       type: 'result_report',
       title: 'Result Reported',
-      message: `Result reported for match with ${match.opponent.name}`,
+      message: match.opponent.name,
       createdAt: new Date().toISOString(),
       read: false,
       relatedId: report.id,
