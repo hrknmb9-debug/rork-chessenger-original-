@@ -142,11 +142,11 @@ const pickerStyles = StyleSheet.create({
   container: {
     borderRadius: 22,
     padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    ...Platform.select({
+      web: { boxShadow: '0px 10px 24px rgba(0,0,0,0.15)' },
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 24 },
+      default: { elevation: 12 },
+    }),
   },
   emojiRow: {
     flexDirection: 'row',
@@ -912,11 +912,11 @@ function createStyles(colors: ThemeColors) {
     bubble: {
       paddingHorizontal: 18,
       paddingVertical: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 4,
-      elevation: 2,
+      ...Platform.select({
+        web: { boxShadow: '0px 1px 4px rgba(0,0,0,0.06)' },
+        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+        default: { elevation: 2 },
+      }),
     },
     bubbleMe: {
       backgroundColor: colors.gold,
@@ -1004,11 +1004,11 @@ function createStyles(colors: ThemeColors) {
       gap: 10,
       borderRadius: 24,
       borderWidth: 1,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 8,
-      elevation: 3,
+      ...Platform.select({
+        web: { boxShadow: '0px 2px 8px rgba(0,0,0,0.06)' },
+        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 },
+        default: { elevation: 3 },
+      }),
     },
     mediaBtn: {
       width: 44,

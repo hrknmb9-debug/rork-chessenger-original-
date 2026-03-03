@@ -79,11 +79,11 @@ function createStyles(colors: ThemeColors, floating: boolean) {
       zIndex: 100,
       borderRadius: 16,
       overflow: 'hidden',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      elevation: 6,
+      ...Platform.select({
+        web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.15)' },
+        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
+        default: { elevation: 6 },
+      }),
     },
     glass: {
       borderRadius: 16,
@@ -115,11 +115,11 @@ function createStyles(colors: ThemeColors, floating: boolean) {
       overflow: 'hidden',
       borderWidth: 1,
       borderColor,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 6,
-      elevation: 3,
+      ...Platform.select({
+        web: { boxShadow: '0px 2px 6px rgba(0,0,0,0.08)' },
+        ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 },
+        default: { elevation: 3 },
+      }),
     },
     glassInline: {
       borderRadius: 14,
