@@ -447,8 +447,8 @@ export default function ChatScreen() {
     return roomId;
   }, [roomId, isNewConversation, playerIdFromNew, currentUserId]);
 
-  const sendContent = useCallback(async (content: string) => {
-    if (!currentUserId) return;
+  const sendContent = useCallback(async (content: string): Promise<boolean> => {
+    if (!currentUserId) return false;
     const actualRoomId = getActualRoomId();
 
     const tempId = `msg_temp_${Date.now()}`;
@@ -464,13 +464,13 @@ export default function ChatScreen() {
 
     try {
       const { isImage, value: imageUrl } = decodeMessageContent(content);
-      const payload = {
+      const payload: Record<string, unknown> = {
         room_id: actualRoomId,
         sender_id: currentUserId,
         content,
         is_read: false,
-        image_url: isImage && imageUrl ? imageUrl : null,
       };
+      if (isImage && imageUrl) payload.image_url = imageUrl;
       const { data, error } = await supabase
         .from('messages')
         .insert(payload)
@@ -479,14 +479,20 @@ export default function ChatScreen() {
 
       if (data && !error) {
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: data.id } : m));
-      } else if (error) {
+        return true;
+      }
+      if (error) {
         console.log('Chat: Send failed', error.message);
+        setMessages(prev => prev.filter(m => m.id !== tempId));
         Alert.alert(t('error', language), `送信に失敗しました: ${error.message}`);
       }
+      return false;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log('Chat: Send failed', e);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
       Alert.alert(t('error', language), `送信に失敗しました: ${msg}`);
+      return false;
     }
   }, [currentUserId, getActualRoomId, language]);
 
@@ -494,11 +500,16 @@ export default function ChatScreen() {
     const text = inputText.trim();
     if (!text) return;
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // ユーザー操作時に通知音用 AudioContext をウォームアップ
     primeMessageNotificationSound().catch(() => {});
-    setInputText('');
-    await sendContent(text);
+    const ok = await sendContent(text);
+    if (ok) setInputText('');
   }, [inputText, sendContent]);
+
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
+  const onSendPress = useCallback(() => {
+    handleSendRef.current();
+  }, []);
 
   // ── Image picker ───────────────────────────────────────────────────────────
 
@@ -691,12 +702,13 @@ export default function ChatScreen() {
               onChangeText={setInputText}
               multiline
               maxLength={1000}
-              onSubmitEditing={handleSend}
+              onSubmitEditing={onSendPress}
               blurOnSubmit={false}
+              returnKeyType="send"
             />
 
             <Pressable
-              onPress={handleSend}
+              onPress={onSendPress}
               style={[
                 styles.sendBtn,
                 { backgroundColor: inputText.trim() ? colors.gold : colors.surfaceHighlight },

@@ -230,8 +230,8 @@ export default function ChatScreen() {
   }, [roomId, isNewConversation, playerIdFromNew, currentUserId]);
 
   const sendContent = useCallback(
-    async (content: string) => {
-      if (!currentUserId) return;
+    async (content: string): Promise<boolean> => {
+      if (!currentUserId) return false;
       const actualRoomId = getActualRoomId();
 
       const tempId = 'msg_temp_' + Date.now();
@@ -250,13 +250,13 @@ export default function ChatScreen() {
 
       try {
         const { isImage, value: imageUrl } = decodeMessageContent(content);
-        const payload = {
+        const payload: Record<string, unknown> = {
           room_id: actualRoomId,
           sender_id: currentUserId,
           content,
           is_read: false,
-          image_url: isImage && imageUrl ? imageUrl : null,
         };
+        if (isImage && imageUrl) payload.image_url = imageUrl;
         const { data, error } = await supabase
           .from('messages')
           .insert(payload)
@@ -268,16 +268,22 @@ export default function ChatScreen() {
           setMessages((prev) =>
             prev.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)),
           );
-        } else if (error) {
+          return true;
+        }
+        if (error) {
           pendingTempIds.current.delete(tempId);
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
           console.log('Chat: send error ' + error.message);
           Alert.alert(t('error', language), `送信に失敗しました: ${error.message}`);
         }
+        return false;
       } catch (e) {
         pendingTempIds.current.delete(tempId);
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
         const msg = e instanceof Error ? e.message : String(e);
         console.log('Chat: send failed ' + String(e));
         Alert.alert(t('error', language), `送信に失敗しました: ${msg}`);
+        return false;
       }
     },
     [currentUserId, getActualRoomId, language],
@@ -289,8 +295,8 @@ export default function ChatScreen() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setInputText('');
-    await sendContent(text);
+    const ok = await sendContent(text);
+    if (ok) setInputText('');
   }, [inputText, currentUserId, sendContent]);
 
   const handlePickImage = useCallback(async () => {
@@ -503,6 +509,9 @@ export default function ChatScreen() {
             onChangeText={setInputText}
             multiline
             maxLength={500}
+            onSubmitEditing={handleSend}
+            blurOnSubmit={false}
+            returnKeyType="send"
           />
 
           <Pressable
