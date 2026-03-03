@@ -96,12 +96,14 @@ function PostCard({
   onLike,
   onComment,
   onAuthorPress,
+  onImagePress,
   language,
 }: {
   post: TimelinePost;
   onLike: (id: string) => void;
   onComment: (id: string, text: string, parentId?: string) => void;
   onAuthorPress: (id: string) => void;
+  onImagePress?: (url: string) => void;
   language: string;
 }) {
   const { colors } = useTheme();
@@ -201,7 +203,9 @@ function PostCard({
       <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 12 }}>{contentText}</Text>
 
       {post.imageUrl && (
-        <Image source={{ uri: post.imageUrl }} style={{ width: '100%', height: 200, borderRadius: 12, marginBottom: 12, backgroundColor: colors.surfaceLight }} contentFit="cover" />
+        <Pressable onPress={() => onImagePress?.(post.imageUrl!)} style={{ marginBottom: 12 }}>
+          <Image source={{ uri: post.imageUrl }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: colors.surfaceLight }} contentFit="cover" />
+        </Pressable>
       )}
 
       {post.matchResult && (
@@ -339,6 +343,7 @@ export default function TimelineScreen() {
   const [eventMaxParticipants, setEventMaxParticipants] = useState<string>('10');
   const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [showTimePicker, setShowTimePicker] = useState<boolean>(false);
+  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -482,6 +487,7 @@ export default function TimelineScreen() {
         onLike={toggleLike}
         onComment={handleComment}
         onAuthorPress={handleAuthorPress}
+        onImagePress={setExpandedImageUrl}
         language={language}
       />
     ),
@@ -711,9 +717,29 @@ export default function TimelineScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <Modal visible={expandedImageUrl !== null} transparent animationType="fade" onRequestClose={() => setExpandedImageUrl(null)}>
+        <Pressable style={expandedImageStyles.backdrop} onPress={() => setExpandedImageUrl(null)}>
+          {expandedImageUrl ? (
+            <Pressable style={expandedImageStyles.imageContainer} onPress={e => e.stopPropagation()}>
+              <Image source={{ uri: expandedImageUrl }} style={expandedImageStyles.image} contentFit="contain" />
+            </Pressable>
+          ) : null}
+          <Pressable style={[expandedImageStyles.closeBtn, { backgroundColor: colors.surface }]} onPress={() => setExpandedImageUrl(null)}>
+            <XIcon size={24} color={colors.textPrimary} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+const expandedImageStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  imageContainer: { flex: 1, alignSelf: 'stretch', justifyContent: 'center' },
+  image: { flex: 1, width: '100%' },
+  closeBtn: { position: 'absolute', top: 48, right: 16, width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+});
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({

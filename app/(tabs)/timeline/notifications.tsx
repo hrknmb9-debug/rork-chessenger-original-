@@ -6,9 +6,14 @@ import { useChess } from '@/providers/ChessProvider';
 import { AppNotification } from '@/types';
 import { getTimeAgo } from '@/utils/translations';
 
+const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join'] as const;
+
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const { notifications, markAllNotificationsRead, language } = useChess();
+  const filteredNotifications = notifications.filter(n =>
+    TIMELINE_NOTIFICATION_TYPES.includes(n.type as typeof TIMELINE_NOTIFICATION_TYPES[number])
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -34,13 +39,13 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {notifications.length === 0 ? (
+      {filteredNotifications.length === 0 ? (
         <View style={styles.empty}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>通知はありません</Text>
         </View>
       ) : (
         <FlatList
-          data={notifications}
+          data={filteredNotifications}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
           contentContainerStyle={styles.list}

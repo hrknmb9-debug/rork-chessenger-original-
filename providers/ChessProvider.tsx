@@ -1417,18 +1417,18 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         parent_id: parentId ?? null,
       });
       console.log('Comment synced to Supabase');
-      const actorName = profile?.name ?? 'Someone';
-      const { data: postRow } = await supabase.from('posts').select('user_id').eq('id', postId).single();
-      const postOwnerId = postRow?.user_id;
-      if (postOwnerId && postOwnerId !== userId) {
-        await supabase.from('notifications').insert({
-          user_id: postOwnerId,
-          type: parentId ? 'post_reply' : 'post_comment',
-          content: parentId ? `${actorName}が返信しました` : `${actorName}がコメントしました`,
-          related_id: postId,
-        });
-      }
       if (parentId) {
+        const actorName = profile?.name ?? 'Someone';
+        const { data: postRow } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+        const postOwnerId = postRow?.user_id;
+        if (postOwnerId && postOwnerId !== userId) {
+          await supabase.from('notifications').insert({
+            user_id: postOwnerId,
+            type: 'post_reply',
+            content: `${actorName}が返信しました`,
+            related_id: postId,
+          });
+        }
         const { data: parentRow } = await supabase.from('comments').select('user_id').eq('id', parentId).single();
         const parentAuthorId = parentRow?.user_id;
         if (parentAuthorId && parentAuthorId !== userId && parentAuthorId !== postOwnerId) {
@@ -1574,8 +1574,15 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId]);
 
+  const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join'] as const;
+
   const unreadNotificationCount = useMemo(
     () => notifications.filter(n => !n.read).length,
+    [notifications]
+  );
+
+  const unreadTimelineNotificationCount = useMemo(
+    () => notifications.filter(n => !n.read && TIMELINE_NOTIFICATION_TYPES.includes(n.type as typeof TIMELINE_NOTIFICATION_TYPES[number])).length,
     [notifications]
   );
 
@@ -1681,10 +1688,23 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         user_id: userId,
       });
       console.log('Event join synced');
+      const { data: evRow } = await supabase.from('events').select('post_id').eq('id', eventId).single();
+      const postIdForOwner = evRow?.post_id ?? postId;
+      const { data: postRow } = await supabase.from('posts').select('user_id').eq('id', postIdForOwner).single();
+      const ownerId = postRow?.user_id;
+      if (ownerId && ownerId !== userId) {
+        const actorName = profile?.name ?? 'Someone';
+        await supabase.from('notifications').insert({
+          user_id: ownerId,
+          type: 'event_join',
+          content: `${actorName}があなたのイベントに参加しました`,
+          related_id: postIdForOwner,
+        });
+      }
     } catch (e) {
       console.log('Event join sync failed', e);
     }
-  }, [currentUserId, timelinePosts]);
+  }, [currentUserId, timelinePosts, profile?.name]);
 
   const leaveEvent = useCallback(async (postId: string) => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -1757,6 +1777,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     resultReports,
     notifications,
     unreadNotificationCount,
+    unreadTimelineNotificationCount,
     activeUsersCount,
     currentUserId,
     sendMatchRequest,

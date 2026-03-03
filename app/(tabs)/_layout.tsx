@@ -34,7 +34,7 @@ function BadgeIcon({ children, count, colors }: { children: React.ReactNode; cou
 
 export default function TabLayout() {
   const { colors } = useTheme();
-  const { pendingIncoming, language, totalUnreadMessageCount } = useChess();
+  const { pendingIncoming, language, totalUnreadMessageCount, unreadTimelineNotificationCount } = useChess();
 
   const matchBadge = pendingIncoming.length;
 
@@ -70,7 +70,12 @@ export default function TabLayout() {
         name="timeline"
         options={{
           title: t('tab_timeline', language),
-          tabBarIcon: ({ color, size }) => <Newspaper size={size} color={color} />,
+          tabBarBadge: unreadTimelineNotificationCount > 0 ? unreadTimelineNotificationCount : undefined,
+          tabBarIcon: ({ color, size }) => (
+            <BadgeIcon count={unreadTimelineNotificationCount} colors={colors}>
+              <Newspaper size={size} color={color} />
+            </BadgeIcon>
+          ),
         }}
       />
       <Tabs.Screen

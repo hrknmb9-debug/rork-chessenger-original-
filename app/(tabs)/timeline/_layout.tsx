@@ -8,7 +8,7 @@ import { BackNavButton } from '@/components/BackNavButton';
 
 function BellHeaderButton() {
   const { colors } = useTheme();
-  const { unreadNotificationCount } = useChess();
+  const { unreadTimelineNotificationCount } = useChess();
   const router = useRouter();
   return (
     <Pressable
@@ -16,7 +16,7 @@ function BellHeaderButton() {
       style={{ marginRight: 12, padding: 6, position: 'relative' }}
     >
       <Bell size={22} color={colors.textPrimary} />
-      {unreadNotificationCount > 0 && (
+      {unreadTimelineNotificationCount > 0 && (
         <View
           style={{
             position: 'absolute',
@@ -32,7 +32,7 @@ function BellHeaderButton() {
           }}
         >
           <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff' }}>
-            {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+            {unreadTimelineNotificationCount > 99 ? '99+' : unreadTimelineNotificationCount}
           </Text>
         </View>
       )}
