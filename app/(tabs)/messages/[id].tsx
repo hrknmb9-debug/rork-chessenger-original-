@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  useRef,
-  useMemo,
-  useEffect,
-} from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +12,7 @@ import {
   Modal,
   Alert,
   TouchableOpacity,
+  InteractionManager,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -254,6 +249,11 @@ function MessageBubble({
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const { isImage, value } = decodeMessageContent(item.text);
+
+  // item.text や language 変更時に翻訳をリセット（iOS再描画保証）
+  useEffect(() => {
+    setTranslatedText(null);
+  }, [item.text, item.id, language]);
   const imageUrl = isImage ? (value || (item.imageUrl ?? undefined)) : (item.imageUrl ?? undefined);
   const hasTranslatableText = !isImage && item.text?.trim().length > 0;
   const timeStr = getTimeAgo(item.timestamp, language);
@@ -270,7 +270,14 @@ function MessageBubble({
       const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
-        if (decoded.trim()) setTranslatedText(decoded);
+        if (decoded.trim()) {
+          const doSet = () => setTranslatedText(decoded);
+          if (Platform.OS === 'ios') {
+            InteractionManager.runAfterInteractions(doSet);
+          } else {
+            doSet();
+          }
+        }
       } else if ('error' in result) {
         if (__DEV__) console.warn('[translate]', result.error);
         Alert.alert(t('error', language), t('translation_failed', language));
@@ -348,7 +355,7 @@ function MessageBubble({
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
             <>
-              <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+              <Text key={`msg-${item.id}-${translatedText ? 't' : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
                 {displayText}
               </Text>
               {translatedText && displayText.trim() !== (item.text ?? '').trim() && (

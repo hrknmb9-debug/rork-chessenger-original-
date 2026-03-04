@@ -11,6 +11,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { supabase } from '@/utils/supabaseClient';
 
+/** iOS 同時接続制限対応: 並列翻訳を最大 CONCURRENT_TRANSLATE に制限 */
+const CONCURRENT_TRANSLATE = 4;
+let activeCount = 0;
+const waiting: Array<() => void> = [];
+
+async function withLimit<T>(fn: () => Promise<T>): Promise<T> {
+  while (activeCount >= CONCURRENT_TRANSLATE) {
+    await new Promise<void>(resolve => { waiting.push(resolve); });
+  }
+  activeCount++;
+  try {
+    return await fn();
+  } finally {
+    activeCount--;
+    waiting.shift()?.();
+  }
+}
+
 const TRANSLATE_CACHE_KEY = 'chess_translate_cache';
 const CACHE_MAX_ENTRIES = 500;
 const CACHE_VERSION = 7;
@@ -40,11 +58,14 @@ function safeDecodeTranslated(text: string): string {
         if (decoded && decoded.length > 0) return decoded;
       }
     }
-    if (/\uFFFD/.test(s)) return s.replace(/\uFFFD/g, '');
+    // 豆腐文字・置換文字の除去（iOS 絵文字破損時）
+    if (/\uFFFD/.test(s)) s = s.replace(/\uFFFD/g, '');
+    // 壊れたサロゲートペア（孤立したハイサロゲート）の除去
+    s = s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '');
   } catch {
     // デコード失敗時は元の文字列を返す
   }
-  return text;
+  return s || text;
 }
 
 /** 翻訳表示用：UIレイヤーで最終デコードを適用（防御的） */
@@ -388,24 +409,26 @@ export async function translateText(
   const cached = await getCached(text, normalizedTarget, sourceLang);
   if (cached) return { text: safeDecodeTranslated(cached) };
 
-  const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
-  if (viaEdge && 'text' in viaEdge) {
-    const decoded = safeDecodeTranslated(viaEdge.text);
-    if (decoded.trim() && decoded.trim() !== text.trim()) {
-      setCache(text, normalizedTarget, sourceLang, decoded);
+  return withLimit(async () => {
+    const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
+    if (viaEdge && 'text' in viaEdge) {
+      const decoded = safeDecodeTranslated(viaEdge.text);
+      if (decoded.trim() && decoded.trim() !== text.trim()) {
+        setCache(text, normalizedTarget, sourceLang, decoded);
+      }
+      return { text: decoded };
     }
-    return { text: decoded };
-  }
 
-  if (TRANSLATE_DEBUG) console.log('[translate] Edge failed, trying MyMemory');
-  const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
-  if (viaMyMemory && 'text' in viaMyMemory) {
-    const decoded = safeDecodeTranslated(viaMyMemory.text);
-    if (decoded.trim() && decoded.trim() !== text.trim()) {
-      setCache(text, normalizedTarget, sourceLang, decoded);
+    if (TRANSLATE_DEBUG) console.log('[translate] Edge failed, trying MyMemory');
+    const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
+    if (viaMyMemory && 'text' in viaMyMemory) {
+      const decoded = safeDecodeTranslated(viaMyMemory.text);
+      if (decoded.trim() && decoded.trim() !== text.trim()) {
+        setCache(text, normalizedTarget, sourceLang, decoded);
+      }
+      return { text: decoded };
     }
-    return { text: decoded };
-  }
 
-  return { error: 'Translation failed' };
+    return { error: 'Translation failed' };
+  });
 }

@@ -7,7 +7,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Content-Type': 'application/json; charset=utf-8',
+  'Content-Type': 'application/json; charset=utf-8', // iOS 絵文字・特殊文字の文字化け防止
 };
 
 function normalizeLang(lang: string): string {
@@ -98,11 +98,12 @@ serve(async (req) => {
         /* デコード失敗時は元の文字列を使用 */
       }
     }
-    // UTF-8 で正しく JSON シリアライズ（Deno はデフォルトで UTF-8）
-    return new Response(
-      JSON.stringify({ translatedText: output }),
-      { headers: { ...corsHeaders } }
-    );
+    // UTF-8 で JSON シリアライズ（絵文字・サロゲートペアを含む）
+    const body = JSON.stringify({ translatedText: output });
+    return new Response(body, {
+      headers: { ...corsHeaders },
+      status: 200,
+    });
   } catch (e) {
     return new Response(
       JSON.stringify({ error: String(e) }),
