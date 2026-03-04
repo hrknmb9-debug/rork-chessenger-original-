@@ -1,7 +1,7 @@
--- RLS auth_rls_initplan 修正: auth.uid()/auth.jwt() を (select auth.X()) でラップしてクエリパフォーマンスを改善
+-- RLS auth_rls_initplan 修正: auth.jwt() を (select auth.jwt()) でラップ
 -- https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select
 
--- 1. storage.objects: message_images_authenticated_insert
+-- storage.objects: message_images_authenticated_insert
 DROP POLICY IF EXISTS "message_images_authenticated_insert" ON storage.objects;
 CREATE POLICY "message_images_authenticated_insert"
 ON storage.objects
