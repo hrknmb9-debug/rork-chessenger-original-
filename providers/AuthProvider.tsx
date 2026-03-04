@@ -17,6 +17,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const loadProfileFromSupabase = useCallback(async (userId: string, email: string, fallbackName: string, fallbackAvatar: string): Promise<AuthUser> => {
     try {
+      // #region agent log
+      const { data: { session } } = await supabase.auth.getSession();
+      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'AuthProvider.tsx:loadProfileFromSupabase',message:'profiles fetch before',data:{userId,hasSession:!!session},hypothesisId:'H-A,H-B,H-D',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const { data: profileData, error } = await supabaseNoAuth
         .from('profiles')
         .select('*')
@@ -33,9 +37,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
           isLoggedIn: true,
         };
       } else {
+        // #region agent log
+        const errObj = error as { code?: string; message?: string; details?: string } | undefined;
+        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'AuthProvider.tsx:loadProfileFromSupabase',message:'profiles fetch error',data:{userId,errorCode:errObj?.code,errorMessage:errObj?.message,errorDetails:errObj?.details},hypothesisId:'H-A,H-B,H-C',timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.log('Auth: Profile not found or error for', userId, error?.message);
       }
     } catch (e) {
+      // #region agent log
+      const ex = e as { code?: string; message?: string; details?: string };
+      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'AuthProvider.tsx:loadProfileFromSupabase',message:'profiles fetch catch',data:{errorCode:ex?.code,errorMessage:typeof ex?.message==='string'?ex.message:String(e)},hypothesisId:'H-A,H-C',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       console.log('Auth: Profile fetch failed, using fallback', e);
     }
 

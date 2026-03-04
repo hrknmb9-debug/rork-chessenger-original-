@@ -576,6 +576,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         if (userId) {
           await supabaseNoAuth.from('profiles').update({ last_seen: new Date().toISOString() }).eq('id', userId);
 
+          // #region agent log
+          const { data: { session } } = await supabase.auth.getSession();
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'ChessProvider.tsx:loadSupabaseData',message:'profiles fetch before',data:{userId,hasSession:!!session},hypothesisId:'H-A,H-B,H-D',timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           const { data: profileData, error: profileError } = await supabaseNoAuth
             .from('profiles')
             .select('*')
@@ -615,6 +619,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             });
             setProfileLoaded(true);
           } else {
+            // #region agent log
+            const errObj = profileError as { code?: string; message?: string; details?: string } | undefined;
+            fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'ChessProvider.tsx:loadSupabaseData',message:'profiles fetch error',data:{userId,errorCode:errObj?.code,errorMessage:errObj?.message,errorDetails:errObj?.details},hypothesisId:'H-A,H-B,H-C',timestamp:Date.now()})}).catch(()=>{});
+            // #endregion
             console.log('ChessProvider: No profile found in Supabase, using defaults');
             setProfileLoaded(true);
           }
