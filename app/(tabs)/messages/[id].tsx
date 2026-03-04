@@ -61,17 +61,17 @@ type ListItem =
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatDateLabel(isoStr: string): string {
+function formatDateLabel(isoStr: string, language: string): string {
   const d = new Date(isoStr);
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return '今日';
-  if (d.toDateString() === yesterday.toDateString()) return '昨日';
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  if (d.toDateString() === today.toDateString()) return t('today', language);
+  if (d.toDateString() === yesterday.toDateString()) return t('yesterday', language);
+  return language === 'ja' ? `${d.getMonth() + 1}月${d.getDate()}日` : `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-function buildListItems(messages: Message[]): ListItem[] {
+function buildListItems(messages: Message[], language: string): ListItem[] {
   const items: ListItem[] = [];
   let lastDateKey = '';
 
@@ -80,7 +80,7 @@ function buildListItems(messages: Message[]): ListItem[] {
     const dateKey = new Date(msg.timestamp).toDateString();
 
     if (dateKey !== lastDateKey) {
-      items.push({ kind: 'date', id: `date_${dateKey}_${i}`, label: formatDateLabel(msg.timestamp) });
+      items.push({ kind: 'date', id: `date_${dateKey}_${i}`, label: formatDateLabel(msg.timestamp, language) });
       lastDateKey = dateKey;
     }
 
@@ -363,7 +363,7 @@ function MessageBubble({
               <Languages size={12} color={colors.textMuted} />
             )}
             <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>
-              {isTranslating ? (language === 'ja' ? '翻訳中...' : 'Translating...') : translatedText ? t('original', language) : t('translate', language)}
+              {isTranslating ? t('translating', language) : translatedText ? t('original', language) : t('translate', language)}
             </Text>
           </Pressable>
         )}
@@ -653,7 +653,7 @@ export default function ChatScreen() {
 
   // ── Build grouped list ─────────────────────────────────────────────────────
 
-  const listItems = useMemo(() => buildListItems(messages), [messages]);
+  const listItems = useMemo(() => buildListItems(messages, language), [messages, language]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -684,7 +684,7 @@ export default function ChatScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.back()} /> }} />
+        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.replace('/messages' as any)} /> }} />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.gold} />
         </View>
@@ -695,7 +695,7 @@ export default function ChatScreen() {
   if (!chatPlayer) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.back()} /> }} />
+        <Stack.Screen options={{ title: '', headerLeft: () => <BackNavButton onPress={() => router.replace('/messages' as any)} /> }} />
         <View style={styles.center}>
           <Text style={styles.notFoundText}>{t('conversation_not_found', language)}</Text>
         </View>
@@ -712,7 +712,7 @@ export default function ChatScreen() {
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
           headerShadowVisible: false,
-          headerLeft: () => <BackNavButton onPress={() => router.back()} />,
+          headerLeft: () => <BackNavButton onPress={() => router.replace('/messages' as any)} />,
           headerTitle: () => (
             <Pressable
               onPress={() => router.push(`/player/${chatPlayer.id}` as any)}
@@ -729,7 +729,7 @@ export default function ChatScreen() {
               </View>
               <View>
                 <Text style={styles.headerName}>{chatPlayer.name}</Text>
-                <Text style={styles.headerStatus}>オンライン</Text>
+                <Text style={styles.headerStatus}>{t('online', language)}</Text>
               </View>
             </Pressable>
           ),
@@ -752,7 +752,7 @@ export default function ChatScreen() {
           ListEmptyComponent={
             <View style={styles.emptyChat}>
               <Text style={[styles.emptyChatText, { color: colors.textMuted }]}>
-                メッセージを送ってみましょう
+                {t('empty_chat_hint', language)}
               </Text>
             </View>
           }

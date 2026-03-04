@@ -112,7 +112,7 @@ function OnlineStrip({
       <View style={strip.headerRow}>
         <View style={strip.dot} />
         <Text style={[strip.title, { color: '#22C55E' }]}>
-          {language === 'ja' ? 'オンライン中' : 'Online Now'}
+          {t('online_now', language)}
         </Text>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={strip.scroll}>
@@ -137,7 +137,7 @@ function OnlineStrip({
           ))
         ) : (
           <Text style={{ color: colors.textMuted, fontSize: 12, paddingLeft: 4 }}>
-            {language === 'ja' ? '待機中のプレイヤーはいません' : 'No players online'}
+            {t('no_players_online', language)}
           </Text>
         )}
       </ScrollView>
@@ -213,9 +213,9 @@ export default function HomeScreen() {
   }, [players, searchQuery, activeTab, userLocation]);
 
   const TABS: { key: TabKey; label: string }[] = [
-    { key: 'all', label: language === 'ja' ? 'すべて' : 'All' },
-    { key: 'nearby', label: language === 'ja' ? '近く' : 'Nearby' },
-    { key: 'online', label: language === 'ja' ? 'オンライン' : 'Online' },
+    { key: 'all', label: t('all', language) },
+    { key: 'nearby', label: t('nearby', language) },
+    { key: 'online', label: t('online', language) },
   ];
 
   if (loading) {
@@ -267,7 +267,7 @@ export default function HomeScreen() {
               <Pressable onPress={() => router.push('/(tabs)/(home)/map' as any)} style={styles.mapBtn}>
                 <Map size={16} color={colors.blue} />
                 <Text style={[styles.mapBtnText, { color: colors.blue }]}>
-                  {language === 'ja' ? 'マップ' : 'Map'}
+                  {t('map_view', language)}
                 </Text>
               </Pressable>
             </View>

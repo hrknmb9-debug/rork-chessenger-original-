@@ -1,9 +1,12 @@
 import { Stack } from 'expo-router';
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useChess } from '@/providers/ChessProvider';
+import { t } from '@/utils/translations';
 
 export default function MessagesLayout() {
   const { colors } = useTheme();
+  const { language } = useChess();
 
   return (
     <Stack
@@ -18,7 +21,7 @@ export default function MessagesLayout() {
     >
       <Stack.Screen
         name="index"
-        options={{ title: 'メッセージ' }}
+        options={{ title: t('tab_messages', language) }}
       />
       <Stack.Screen
         name="[id]"

@@ -68,15 +68,15 @@ function SwipeableConversation({
     <View style={styles.rightActions}>
       <Pressable style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]} onPress={handleRead}>
         <CheckCheck size={20} color="#fff" />
-        <Text style={styles.actionLabel}>既読</Text>
+        <Text style={styles.actionLabel}>{t('mark_read', language)}</Text>
       </Pressable>
       <Pressable style={[styles.actionBtn, { backgroundColor: '#EF4444' }]} onPress={handleDelete}>
         <Trash2 size={20} color="#fff" />
-        <Text style={styles.actionLabel}>削除</Text>
+        <Text style={styles.actionLabel}>{t('delete_conversation', language)}</Text>
       </Pressable>
       <Pressable style={[styles.actionBtn, { backgroundColor: '#F97316' }]} onPress={handleBlock}>
         <ShieldOff size={20} color="#fff" />
-        <Text style={styles.actionLabel}>ブロック</Text>
+        <Text style={styles.actionLabel}>{t('block_user', language)}</Text>
       </Pressable>
     </View>
   ), [handleRead, handleDelete, handleBlock, styles]);
@@ -324,10 +324,10 @@ export default function MessagesScreen() {
 
   const handleDelete = useCallback((convId: string) => {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert('削除', 'この会話を削除しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
+    Alert.alert(t('delete_conversation', language), t('delete_conversation_confirm', language), [
+      { text: t('cancel', language), style: 'cancel' },
       {
-        text: '削除',
+        text: t('delete_conversation', language),
         style: 'destructive',
         onPress: () => setConversations(prev => prev.filter(c => c.id !== convId)),
       },
@@ -337,12 +337,12 @@ export default function MessagesScreen() {
   const handleBlock = useCallback((conv: Conversation) => {
     if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(
-      'ブロック',
-      `${conv.player.name} をブロックしますか？`,
+      t('block_confirm', language),
+      language === 'ja' ? `${conv.player.name}をブロックしますか？` : `Block ${conv.player.name}?`,
       [
-        { text: 'キャンセル', style: 'cancel' },
+        { text: t('cancel', language), style: 'cancel' },
         {
-          text: 'ブロック',
+          text: t('block_user', language),
           style: 'destructive',
           onPress: async () => {
             await blockUser(conv.player.id);
@@ -351,7 +351,7 @@ export default function MessagesScreen() {
         },
       ]
     );
-  }, [blockUser]);
+  }, [blockUser, language]);
 
   const filteredConversations = useMemo(() => {
     if (!searchQuery.trim()) return conversations;
@@ -400,7 +400,7 @@ export default function MessagesScreen() {
         <Search size={16} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
-          placeholder="検索"
+          placeholder={t('search', language)}
           placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}

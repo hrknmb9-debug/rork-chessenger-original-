@@ -105,7 +105,7 @@ function CommentItem({
             <Pressable onPress={onTranslate} disabled={translating} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               {translating ? <ActivityIndicator size="small" color={colors.textMuted} style={{ transform: [{ scale: 0.7 }] }} /> : null}
               <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>
-                {translating ? (language === 'ja' ? '翻訳中...' : 'Translating...') : translated ? t('original', language) : t('translate', language)}
+                {translating ? t('translating', language) : translated ? t('original', language) : t('translate', language)}
               </Text>
             </Pressable>
           </View>
@@ -290,11 +290,11 @@ function PostCard({
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                 Alert.alert(
-                  language === 'ja' ? '削除の確認' : 'Delete post',
-                  language === 'ja' ? '本当にこの投稿を削除しますか？' : 'Are you sure you want to delete this post?',
+                  t('delete_post_confirm', language),
+                  t('delete_post_desc', language),
                   [
-                    { text: language === 'ja' ? 'キャンセル' : 'Cancel', style: 'cancel' },
-                    { text: language === 'ja' ? '削除' : 'Delete', style: 'destructive', onPress: () => onDelete(post.id) },
+                    { text: t('cancel', language), style: 'cancel' },
+                    { text: t('delete_post', language), style: 'destructive', onPress: () => onDelete(post.id) },
                   ]
                 );
               }}
@@ -389,7 +389,7 @@ function PostCard({
             <Languages size={14} color={isShowingTranslated ? colors.gold : colors.textMuted} />
           )}
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: isShowingTranslated ? colors.gold : colors.textMuted }}>
-            {isTranslating ? (language === 'ja' ? '翻訳中...' : 'Translating...') : isShowingTranslated ? t('original', language) : t('translate', language)}
+            {isTranslating ? t('translating', language) : isShowingTranslated ? t('original', language) : t('translate', language)}
           </Text>
         </Pressable>
       </View>
