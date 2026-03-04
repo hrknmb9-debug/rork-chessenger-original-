@@ -1,0 +1,5 @@
+# Supabase ローカル設定
+# https://supabase.com/docs/guides/functions/function-configuration
+
+[functions.translate]
+verify_jwt = false
