@@ -21,6 +21,10 @@ function safeDecodeTranslated(text: string): string {
   if (!text || typeof text !== 'string') return text;
   let s = text.trim();
   if (s.length === 0) return text;
+  // #region agent log
+  const matchPercent = /%[0-9A-Fa-f]{2}/.test(s) || /%\s*[0-9A-Fa-f]/.test(s);
+  fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H3',location:'translateText.ts:safeDecodeTranslated',message:'safeDecode input',data:{inputPreview:s.slice(0,80),matchPercent,len:s.length},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   try {
     // %XX 形式（スペース混入含む）をデコード：iOSで %E 3% 81% のような形式になることがある
     if (/%[0-9A-Fa-f]{2}/.test(s) || /%\s*[0-9A-Fa-f]/.test(s)) {
@@ -35,11 +39,19 @@ function safeDecodeTranslated(text: string): string {
             // 二重デコード失敗時は1回目を返す
           }
         }
-        if (decoded && decoded.length > 0) return decoded;
+        if (decoded && decoded.length > 0) {
+          // #region agent log
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H3',location:'translateText.ts:safeDecodeTranslated',message:'decoded output',data:{outputPreview:decoded.slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          return decoded;
+        }
       }
     }
     if (/\uFFFD/.test(s)) return s.replace(/\uFFFD/g, '');
-  } catch {
+  } catch (e) {
+    // #region agent log
+    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H3',location:'translateText.ts:safeDecodeTranslated',message:'decode failed',data:{err:String(e),inputPreview:s.slice(0,60)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     // デコード失敗時は元の文字列を返す
   }
   return text;
@@ -136,11 +148,19 @@ async function parseJsonFromResponse(res: Response): Promise<Record<string, unkn
   try {
     const buf = await res.arrayBuffer();
     const rawText = new TextDecoder('utf-8').decode(buf);
+    // #region agent log
+    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H1,H2',location:'translateText.ts:parseJsonFromResponse',message:'arrayBuffer+TextDecoder result',data:{platform:Platform.OS,bufLen:buf.byteLength,rawLen:rawText?.length,rawPreview:rawText?.slice(0,120),hasPercent:rawText?.includes('%'),hasFFFD:rawText?.includes('\uFFFD')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     if (TRANSLATE_DEBUG) {
       console.log('[translate] response status:', res.status, 'body length:', rawText?.length, 'preview:', rawText?.slice(0, 80));
     }
     if (!rawText?.trim()) return null;
-    return JSON.parse(rawText) as Record<string, unknown>;
+    const parsed = JSON.parse(rawText) as Record<string, unknown>;
+    const raw = (parsed.translatedText ?? parsed.text) as string | undefined;
+    // #region agent log
+    if(raw&&typeof raw==='string') fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H5',location:'translateText.ts:parseJsonFromResponse',message:'JSON parsed translatedText',data:{parsedPreview:raw.slice(0,100),hasPercent:raw.includes('%')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return parsed;
   } catch (e) {
     if (TRANSLATE_DEBUG) console.warn('[translate] JSON parse failed:', e);
     return null;
@@ -265,10 +285,18 @@ export async function translateText(
   }
 
   const cached = await getCached(text, normalizedTarget, sourceLang);
-  if (cached) return { text: safeDecodeTranslated(cached) };
+  if (cached) {
+    // #region agent log
+    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'H4',location:'translateText.ts:translateText',message:'cache hit',data:{cachedPreview:cached.slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return { text: safeDecodeTranslated(cached) };
+  }
 
   const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
   if (viaEdge && 'text' in viaEdge) {
+    // #region agent log
+    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'source',location:'translateText.ts:translateText',message:'via Edge',data:{platform:Platform.OS,resultPreview:viaEdge.text?.slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const decoded = safeDecodeTranslated(viaEdge.text);
     setCache(text, normalizedTarget, sourceLang, decoded);
     return { text: decoded };
@@ -277,6 +305,9 @@ export async function translateText(
   if (TRANSLATE_DEBUG) console.log('[translate] Edge failed, trying MyMemory');
   const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
   if (viaMyMemory && 'text' in viaMyMemory) {
+    // #region agent log
+    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'74b48e'},body:JSON.stringify({sessionId:'74b48e',hypothesisId:'source',location:'translateText.ts:translateText',message:'via MyMemory',data:{platform:Platform.OS,resultPreview:viaMyMemory.text?.slice(0,80)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     const decoded = safeDecodeTranslated(viaMyMemory.text);
     setCache(text, normalizedTarget, sourceLang, decoded);
     return { text: decoded };
