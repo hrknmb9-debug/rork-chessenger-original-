@@ -383,35 +383,16 @@ async function translateViaEdgeFunction(
 ): Promise<TranslateResult | null> {
   const sanitized = sanitizePayload(text);
   let token = accessToken ?? SUPABASE_ANON_KEY;
-  let tokenSource: 'anon' | 'param' | 'refreshed' = token === SUPABASE_ANON_KEY ? 'anon' : 'param';
   if (Platform.OS === 'web') {
     try {
       const { data: refreshed } = await supabase.auth.refreshSession();
       if (refreshed?.session?.access_token) {
         token = refreshed.session.access_token;
-        tokenSource = 'refreshed';
       }
     } catch {
       /* use existing token */
     }
   }
-  // #region agent log
-  if (Platform.OS === 'web' && __DEV__) {
-    const hasSession = !!token && token !== SUPABASE_ANON_KEY;
-    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2421b3' },
-      body: JSON.stringify({
-        sessionId: '2421b3',
-        location: 'translateText.ts:translateViaEdgeFunction',
-        message: 'translate auth state',
-        data: { tokenSource, hasSession, tokenLen: token?.length ?? 0, platform: 'web' },
-        timestamp: Date.now(),
-        hypothesisId: 'A',
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     if (TRANSLATE_DEBUG) console.warn('[translate] Missing SUPABASE_URL or ANON_KEY');
     return null;
@@ -504,22 +485,6 @@ async function translateViaEdgeFunction(
     try {
       const res = await fetch(url, { method: 'POST', headers, body: bodyStr });
       const rawText = await res.text();
-      // #region agent log
-      if (__DEV__ && res.status !== 200) {
-        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2421b3' },
-          body: JSON.stringify({
-            sessionId: '2421b3',
-            location: 'translateText.ts:doFetch',
-            message: 'doFetch response',
-            data: { status: res.status, tokenSource, bodyPreview: rawText?.slice(0, 120) ?? '' },
-            timestamp: Date.now(),
-            hypothesisId: 'C',
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
       if (__DEV__) console.dir({ webTranslateRes: { status: res.status, bodyPreview: rawText?.slice(0, 300) } }, { depth: 3 });
       let data: Record<string, unknown> | null = null;
       if (rawText?.trim()) {
@@ -563,23 +528,6 @@ async function translateViaEdgeFunction(
       const { data, error } = await supabase.functions.invoke('translate', {
         body: { text: sanitized, targetLang, sourceLang },
       });
-      // #region agent log
-      if (__DEV__) {
-        const errMsg = typeof error === 'object' ? (error as { message?: string })?.message : String(error);
-        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2421b3' },
-          body: JSON.stringify({
-            sessionId: '2421b3',
-            location: 'translateText.ts:invoke',
-            message: 'invoke result',
-            data: { hasError: !!error, errMsg: errMsg?.slice(0, 80) ?? '', hasData: !!data },
-            timestamp: Date.now(),
-            hypothesisId: 'B',
-          }),
-        }).catch(() => {});
-      }
-      // #endregion
       if (__DEV__) console.dir({ invokeResult: { data, error } }, { depth: 4 });
       if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
       if (!error) {
@@ -604,73 +552,6 @@ async function translateViaEdgeFunction(
     if (TRANSLATE_DEBUG) console.warn('[translate] doFetch exception:', (e as Error)?.message ?? e);
   }
   if (result) return result;
-
-  // #region agent log - anon key retry when 401 (hypothesis D)
-  if (Platform.OS === 'web' && tokenSource !== 'anon' && token !== SUPABASE_ANON_KEY) {
-    const doFetchAnon = async (): Promise<TranslateResult | null> => {
-      const url = `${SUPABASE_URL}/functions/v1/translate?t=${Date.now()}`;
-      const bodyStr = JSON.stringify({ text: sanitized, targetLang, sourceLang });
-      const headers: Record<string, string> = {
-        'Accept': 'application/json; charset=utf-8',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json; charset=utf-8',
-      };
-      const res = await fetch(url, { method: 'POST', headers, body: bodyStr });
-      const rawText = await res.text();
-      if (res.status !== 200) {
-        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2421b3' },
-          body: JSON.stringify({
-            sessionId: '2421b3',
-            location: 'translateText.ts:doFetchAnon',
-            message: 'anon retry response',
-            data: { status: res.status },
-            timestamp: Date.now(),
-            hypothesisId: 'D',
-          }),
-        }).catch(() => {});
-        return null;
-      }
-      let data: Record<string, unknown> | null = null;
-      if (rawText?.trim()) {
-        try {
-          data = JSON.parse(rawText.trim()) as Record<string, unknown>;
-        } catch {
-          return null;
-        }
-      }
-      if (!data || data.error) return null;
-      const raw = (data.translatedText ?? data.text) as string | undefined;
-      if (raw && typeof raw === 'string') {
-        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '2421b3' },
-          body: JSON.stringify({
-            sessionId: '2421b3',
-            location: 'translateText.ts:doFetchAnon',
-            message: 'anon retry SUCCESS',
-            data: { status: 200 },
-            timestamp: Date.now(),
-            hypothesisId: 'D',
-          }),
-        }).catch(() => {});
-        return { text: safeDecodeTranslated(raw) };
-      }
-      const base64 = data.translatedTextBase64 as string | undefined;
-      if (base64 && typeof base64 === 'string')
-        return { text: safeDecodeTranslated(decodeBase64ToUtf8(base64)) };
-      return null;
-    };
-    try {
-      const anonResult = await doFetchAnon();
-      if (anonResult) return anonResult;
-    } catch {
-      /* anon retry failed */
-    }
-  }
-  // #endregion
-
   return null;
 }
 

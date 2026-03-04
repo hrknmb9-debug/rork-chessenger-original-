@@ -82,7 +82,6 @@ serve(async (req) => {
     const target = normalizeLang(targetLang ?? 'en');
     const source = normalizeLang(sourceLang ?? 'auto');
     const apiKey = Deno.env.get('GOOGLE_TRANSLATE_API_KEY');
-    console.log('[translate] GOOGLE_TRANSLATE_API_KEY present:', !!apiKey, 'len:', apiKey?.length ?? 0);
     let translated: string | null = null;
     if (apiKey) {
       translated = await translateGoogle(text, target, source, apiKey);
