@@ -129,11 +129,6 @@ function PlayerCardComponent({ player, onPress, language = 'ja' }: PlayerCardPro
             <Zap size={13} color={colors.textMuted} />
             <Text style={styles.footerText}>{player.gamesPlayed}{t('games_count', language)}</Text>
           </View>
-          <View style={styles.langRow}>
-            {player.languages.map(lang => (
-              <Text key={lang} style={styles.langFlag}>{getLanguageFlag(lang)}</Text>
-            ))}
-          </View>
         </View>
       </Pressable>
     </Animated.View>
