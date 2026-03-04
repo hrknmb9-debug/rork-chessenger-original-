@@ -1,5 +1,15 @@
 # Supabase
 
+## Edge Function: translate
+
+翻訳用 Edge Function はデフォルトで JWT 検証が有効です。`config.toml` で `verify_jwt = false` を指定済みですが、デプロイ時に明示的に指定する場合:
+
+```bash
+supabase functions deploy translate --no-verify-jwt
+```
+
+※ ローカル開発は `supabase config.toml` の設定を参照します。
+
 ## メッセージ画像用ストレージ（message-images）
 
 **バケットが存在しない場合**は、次のいずれかで作成とRLSを適用してください。
