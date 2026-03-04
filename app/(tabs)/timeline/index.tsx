@@ -142,10 +142,8 @@ function CommentItem({
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
           <View key={translationState.renderKey ?? `comment-${comment.id}`}>
-            {Platform.OS === 'ios' && translationState.localTranslatedContent != null && !translationState.displayReady ? null : (
-              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
-            )}
-            {translationState.displayReady && translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (commentText ?? '').trim() && (
+            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
+            {translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (commentText ?? '').trim() && (
               <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
             )}
           </View>
@@ -502,12 +500,10 @@ function PostCard({
 
       <View style={{ marginBottom: 12 }}>
         <View key={contentTranslationState.renderKey ?? `post-${post.id}`}>
-          {Platform.OS === 'ios' && contentTranslationState.localTranslatedContent != null && !contentTranslationState.displayReady ? null : (
-            <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
-              {displayContent}
-            </Text>
-          )}
-          {contentTranslationState.displayReady && contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== (contentText ?? '').trim() && (
+          <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
+            {displayContent}
+          </Text>
+          {contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== (contentText ?? '').trim() && (
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
           )}
         </View>

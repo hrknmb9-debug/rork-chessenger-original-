@@ -389,12 +389,10 @@ function MessageBubble({
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
             <View key={translationState.renderKey ?? `msg-${item.id}`}>
-              {Platform.OS === 'ios' && translationState.localTranslatedContent != null && !translationState.displayReady ? null : (
-                <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
-                  {displayText}
-                </Text>
-              )}
-              {translationState.displayReady && translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (item.text ?? '').trim() && (
+              <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+                {displayText}
+              </Text>
+              {translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (item.text ?? '').trim() && (
                 <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther, { fontSize: 10, opacity: 0.8, marginTop: 2 }]}>
                   {t('translated_by_ai', language)}
                 </Text>
