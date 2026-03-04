@@ -22,7 +22,7 @@ function normalizeLang(lang: string): string {
 async function translateGoogle(text: string, target: string, source: string, apiKey: string): Promise<string | null> {
   try {
     const url = `https://translation.googleapis.com/language/translate/v2?key=${apiKey}`;
-    const body: Record<string, unknown> = { q: [text], target };
+    const body: Record<string, unknown> = { q: [text], target, format: 'text' };
     if (source && source !== 'auto') body.source = source;
     const res = await fetch(url, {
       method: 'POST',

@@ -129,24 +129,18 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * UTF-8 でレスポンステキストをパース（iOS の fetch/res.text 文字化け対策）
- * iOS では arrayBuffer + TextDecoder で明示的に UTF-8 を指定
+ * fetch レスポンスを UTF-8 で確実にパース（RN iOS の res.text/res.json インクリメンタルデコード不具合対策）
+ * 全プラットフォームで arrayBuffer + TextDecoder を優先して一貫性を確保
  */
 async function parseJsonFromResponse(res: Response): Promise<Record<string, unknown> | null> {
   try {
-    let rawText: string;
-    if (Platform.OS === 'ios') {
-      const buf = await res.arrayBuffer();
-      rawText = new TextDecoder('utf-8').decode(buf);
-    } else {
-      rawText = await res.text();
-    }
+    const buf = await res.arrayBuffer();
+    const rawText = new TextDecoder('utf-8').decode(buf);
     if (TRANSLATE_DEBUG) {
       console.log('[translate] response status:', res.status, 'body length:', rawText?.length, 'preview:', rawText?.slice(0, 80));
     }
     if (!rawText?.trim()) return null;
-    const parsed = JSON.parse(rawText) as Record<string, unknown>;
-    return parsed;
+    return JSON.parse(rawText) as Record<string, unknown>;
   } catch (e) {
     if (TRANSLATE_DEBUG) console.warn('[translate] JSON parse failed:', e);
     return null;
@@ -206,31 +200,26 @@ async function translateViaEdgeFunction(
     }
   };
 
-  if (Platform.OS === 'ios') {
-    const result = await doFetch();
-    if (result) return result;
-    if (TRANSLATE_DEBUG) console.log('[translate] iOS direct fetch failed, trying invoke');
-  }
-
-  try {
-    const { data, error } = await supabase.functions.invoke('translate', {
-      body: { text, targetLang, sourceLang },
-    });
-    if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
-    if (!error) {
-      const raw = data?.translatedText ?? data?.text;
-      if (raw && typeof raw === 'string') {
-        return { text: safeDecodeTranslated(raw) };
-      }
-    }
-  } catch (e) {
-    if (TRANSLATE_DEBUG) console.warn('[translate] invoke exception:', e);
-  }
-
+  // iOS: invoke は Supabase クライアント内部の fetch を使い、RN の res.text 不具合を避けられないためスキップ
   if (Platform.OS !== 'ios') {
-    const result = await doFetch();
-    if (result) return result;
+    try {
+      const { data, error } = await supabase.functions.invoke('translate', {
+        body: { text, targetLang, sourceLang },
+      });
+      if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
+      if (!error) {
+        const raw = data?.translatedText ?? data?.text;
+        if (raw && typeof raw === 'string') {
+          return { text: safeDecodeTranslated(raw) };
+        }
+      }
+    } catch (e) {
+      if (TRANSLATE_DEBUG) console.warn('[translate] invoke exception:', e);
+    }
   }
+
+  const result = await doFetch();
+  if (result) return result;
 
   return null;
 }
@@ -246,8 +235,9 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
     const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=${langpair}`;
     const res = await fetch(url);
     if (!res.ok) return null;
-    const data = await res.json();
-    const raw = data?.responseData?.translatedText;
+    const data = await parseJsonFromResponse(res);
+    if (!data) return null;
+    const raw = data?.responseData?.translatedText as string | undefined;
     if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
     return null;
   } catch {
