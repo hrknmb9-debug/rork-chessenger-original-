@@ -68,19 +68,41 @@ interface SupabasePost {
   created_at: string;
 }
 
-/** posts と events の結合結果から events を抽出。Supabase の 1:many では events は配列で返る */
+/** 結合行からイベントを取得。Supabase の relation キー名は環境によって異なる可能性あり */
+function getEventsFromRow(row: Record<string, unknown>): unknown[] {
+  const candidates = ['events', 'Events', 'event'] as const;
+  for (const key of candidates) {
+    const v = row[key];
+    if (Array.isArray(v)) return v;
+    if (v != null && typeof v === 'object' && !Array.isArray(v) && 'id' in (v as object)) return [v];
+  }
+  return [];
+}
+
+/** posts と events の結合結果から events を抽出。複数キー名に対応 */
 function extractEventsFromJoinedPosts(
   rows: Array<Record<string, unknown>>
 ): { posts: SupabasePost[]; events: Record<string, unknown>[] } {
   const posts: SupabasePost[] = [];
   const events: Record<string, unknown>[] = [];
+  if (rows.length > 0) {
+    const first = rows[0];
+    console.log('--- DEBUG extractEventsFromJoinedPosts: 1行目のキー ---', Object.keys(first));
+    const evFromFirst = getEventsFromRow(first);
+    console.log('--- 抽出したevents件数(1行目) ---', evFromFirst.length);
+  }
   for (const row of rows) {
-    const { events: ev, ...rest } = row;
-    posts.push(rest as SupabasePost);
-    const evArr = Array.isArray(ev) ? ev : ev != null && typeof ev === 'object' ? [ev] : [];
+    const evArr = getEventsFromRow(row);
+    const rest = Object.fromEntries(
+      Object.entries(row).filter(([k]) => !['events', 'Events', 'event'].includes(k))
+    ) as SupabasePost;
+    posts.push(rest);
     for (const e of evArr) {
-      if (e && typeof e === 'object' && 'id' in e) {
+      if (e && typeof e === 'object' && 'id' in (e as object)) {
         events.push(e as Record<string, unknown>);
+        if (events.length === 1) {
+          console.log('--- DEBUG 型整合: eventsの1件目のキー ---', Object.keys(e as object));
+        }
       }
     }
   }
@@ -730,6 +752,19 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           .order('created_at', { ascending: false })
           .limit(50);
 
+        // #region agent log
+        (() => {
+          const raw = postsError ? null : postsWithEvents;
+          const userIds = raw ? [...new Set((raw as Array<{ user_id?: string }>).map(r => r.user_id).filter(Boolean))] : [];
+          console.log('--- DEBUG loadSupabaseData START ---');
+          console.log('取得件数:', raw?.length ?? 0);
+          console.log('生データ詳細:', raw != null ? JSON.stringify(raw.slice(0, 3), null, 2) : `ERROR: ${postsError?.message}`);
+          console.log('ユーザーID種類数:', userIds.length, userIds);
+          console.log('--- DEBUG loadSupabaseData END ---');
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.loadSupabaseData:fetch', message: 'Load raw fetch', data: { count: raw?.length ?? 0, error: postsError?.message, uniqueUserIds: userIds.length }, timestamp: Date.now(), hypothesisId: 'A' }) }).catch(() => {});
+        })();
+        // #endregion
+
         let postsData: SupabasePost[] | null = null;
         let eventsData: Record<string, unknown>[] = [];
 
@@ -741,12 +776,30 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             const postIds = postsData.map((p: SupabasePost) => p.id);
             const { data: evData } = await supabase.from('events').select('*').in('post_id', postIds);
             eventsData = (evData ?? []).filter((e: Record<string, unknown>) => postIds.includes(String(e.post_id ?? '')));
+            // #region agent log
+            (() => {
+              console.log('--- DEBUG loadSupabaseData CHECKPOINT B (fallback) ---', 'posts:', postsData?.length, 'events:', eventsData?.length);
+              fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.loadSupabaseData:fallback', message: 'Load fallback', data: { postsCount: postsData?.length ?? 0, eventsCount: eventsData?.length ?? 0 }, timestamp: Date.now(), hypothesisId: 'B' }) }).catch(() => {});
+            })();
+            // #endregion
           }
         } else if (postsWithEvents && postsWithEvents.length > 0) {
           const extracted = extractEventsFromJoinedPosts(postsWithEvents as Array<Record<string, unknown>>);
           postsData = extracted.posts;
           eventsData = extracted.events;
+          if (eventsData.length === 0 && postsData.length > 0) {
+            const postIds = postsData.map((p: SupabasePost) => p.id);
+            const { data: evFallback } = await supabase.from('events').select('*').in('post_id', postIds);
+            eventsData = (evFallback ?? []).filter((e: Record<string, unknown>) => postIds.includes(String(e.post_id ?? '')));
+            console.log('ChessProvider: Load joinでeventsが0件→別途取得', eventsData.length, '件');
+          }
           console.log('ChessProvider: Loaded via join', { posts: postsData.length, events: eventsData.length });
+          // #region agent log
+          (() => {
+            console.log('--- DEBUG loadSupabaseData CHECKPOINT B ---', 'posts:', postsData?.length, 'events:', eventsData?.length);
+            fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.loadSupabaseData:extracted', message: 'Load after extract', data: { postsCount: postsData?.length ?? 0, eventsCount: eventsData?.length ?? 0 }, timestamp: Date.now(), hypothesisId: 'B' }) }).catch(() => {});
+          })();
+          // #endregion
         }
 
         if (postsError && !postsData?.length) {
@@ -784,6 +837,13 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           blockedIds
         );
         built = await fillMissingEventDetails(built, postsData, supabase);
+        const loadEventCount = built.filter(p => p.event).length;
+        // #region agent log
+        (() => {
+          console.log('--- DEBUG loadSupabaseData CHECKPOINT C ---', 'built:', built.length, 'withEvent:', loadEventCount);
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.loadSupabaseData:built', message: 'Load after build', data: { builtCount: built.length, withEventCount: loadEventCount }, timestamp: Date.now(), hypothesisId: 'C' }) }).catch(() => {});
+        })();
+        // #endregion
         setTimelinePosts(prev =>
           applyEventCacheToPosts(mergeRecentOwnPosts(userId, built, prev, RECENT_OWN_POST_WINDOW_MS), prev)
         );
@@ -1223,6 +1283,19 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         .order('created_at', { ascending: false })
         .limit(50);
 
+      // #region agent log
+      (() => {
+        const raw = postsError ? null : postsWithEvents;
+        const userIds = raw ? [...new Set((raw as Array<{ user_id?: string }>).map(r => r.user_id).filter(Boolean))] : [];
+        console.log('--- DEBUG START ---');
+        console.log('取得件数:', raw?.length ?? 0);
+        console.log('生データ詳細:', raw != null ? JSON.stringify(raw.slice(0, 3), null, 2) : `ERROR: ${postsError?.message}`);
+        console.log('ユーザーID種類数(他プレイヤー含むか):', userIds.length, userIds);
+        console.log('--- DEBUG END ---');
+        fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.refreshTimeline:fetch', message: 'Raw fetch', data: { count: raw?.length ?? 0, error: postsError?.message, uniqueUserIds: userIds.length, sampleKeys: raw?.[0] ? Object.keys(raw[0] as object) : [] }, timestamp: Date.now(), hypothesisId: 'A' }) }).catch(() => {});
+      })();
+      // #endregion
+
       if (postsError) {
         console.log('ChessProvider: posts+events join error, falling back to separate fetch', postsError.message);
         const { data: postsOnly, error: poErr } = await supabase
@@ -1240,11 +1313,35 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         eventsData = (evData ?? []).filter((e: Record<string, unknown>) =>
           postIds.includes(String(e.post_id ?? ''))
         );
+        // #region agent log
+        (() => {
+          console.log('--- DEBUG CHECKPOINT B (フォールバック後) ---');
+          console.log('posts件数:', postsData.length, 'events件数:', eventsData.length);
+          console.log('events詳細:', JSON.stringify(eventsData.slice(0, 2), null, 2));
+          console.log('--- DEBUG CHECKPOINT B END ---');
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.refreshTimeline:fallback', message: 'Fallback fetched', data: { postsCount: postsData.length, eventsCount: eventsData.length }, timestamp: Date.now(), hypothesisId: 'B' }) }).catch(() => {});
+        })();
+        // #endregion
       } else {
         const extracted = extractEventsFromJoinedPosts((postsWithEvents ?? []) as Array<Record<string, unknown>>);
         postsData = extracted.posts;
         eventsData = extracted.events;
+        if (eventsData.length === 0 && postsData.length > 0) {
+          const postIds = postsData.map((p: SupabasePost) => p.id);
+          const { data: evFallback } = await supabase.from('events').select('*').in('post_id', postIds);
+          eventsData = (evFallback ?? []).filter((e: Record<string, unknown>) => postIds.includes(String(e.post_id ?? '')));
+          console.log('ChessProvider: Joinでeventsが0件だったため別途取得', eventsData.length, '件');
+        }
         console.log('ChessProvider: Timeline fetched via join', { posts: postsData.length, events: eventsData.length, sampleEvent: eventsData[0] });
+        // #region agent log
+        (() => {
+          console.log('--- DEBUG CHECKPOINT B (抽出後) ---');
+          console.log('posts件数:', postsData.length, 'events件数:', eventsData.length);
+          console.log('events詳細:', JSON.stringify(eventsData.slice(0, 2), null, 2));
+          console.log('--- DEBUG CHECKPOINT B END ---');
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.refreshTimeline:extracted', message: 'After extract', data: { postsCount: postsData.length, eventsCount: eventsData.length, hasEvents: eventsData.length > 0 }, timestamp: Date.now(), hypothesisId: 'B' }) }).catch(() => {});
+        })();
+        // #endregion
       }
 
       if (postsData && postsData.length > 0) {
@@ -1281,6 +1378,15 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         );
         built = await fillMissingEventDetails(built, postsData, supabase);
         const eventCount = built.filter(p => p.event).length;
+        // #region agent log
+        (() => {
+          console.log('--- DEBUG CHECKPOINT C (build後) ---');
+          console.log('built件数:', built.length, 'event付き:', eventCount);
+          console.log('built詳細(先頭3件):', JSON.stringify(built.slice(0, 3).map(p => ({ id: p.id, type: p.type, hasEvent: !!p.event, eventTitle: p.event?.title })), null, 2));
+          console.log('--- DEBUG CHECKPOINT C END ---');
+          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'ChessProvider.refreshTimeline:built', message: 'After build', data: { builtCount: built.length, withEventCount: eventCount, sample: built.slice(0, 3).map(p => ({ id: p.id, type: p.type, hasEvent: !!p.event })) }, timestamp: Date.now(), hypothesisId: 'C' }) }).catch(() => {});
+        })();
+        // #endregion
         if (process.env.NODE_ENV === 'development' && eventCount > 0) {
           console.log('ChessProvider: Timeline built', built.length, 'posts,', eventCount, 'with event details', built.filter(p => p.event).map(p => ({ id: p.id, title: p.event?.title })));
         }

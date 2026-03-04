@@ -147,6 +147,15 @@ function PostCard({
 
   const contentText = language === 'en' && post.contentEn ? post.contentEn : post.content;
 
+  // #region agent log
+  (() => {
+    if (post.type === 'event' || post.event) {
+      console.log('--- DEBUG PostCard render ---', 'postId:', post.id, 'type:', post.type, 'hasEvent:', !!post.event, 'eventTitle:', post.event?.title);
+      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '79ac5d' }, body: JSON.stringify({ sessionId: '79ac5d', location: 'timeline/PostCard', message: 'PostCard render', data: { postId: post.id, type: post.type, hasEvent: !!post.event }, timestamp: Date.now(), hypothesisId: 'C' }) }).catch(() => {});
+    }
+  })();
+  // #endregion
+
   const getTypeIcon = () => {
     switch (post.type) {
       case 'match_result': return <Swords size={12} color={colors.gold} />;
