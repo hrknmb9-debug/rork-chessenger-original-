@@ -25,7 +25,7 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'message-images'
-  AND (storage.foldername(name))[1] = (auth.jwt()->>'sub')
+  AND (storage.foldername(name))[1] = ((select auth.jwt())->>'sub')
 );
 
 -- 4. 認証済みユーザー: SELECT（画像表示）許可
