@@ -236,6 +236,8 @@ export const [ChessProvider, useChess] = createContextHook(() => {
   const profileCacheRef = useRef<Map<string, Player>>(new Map());
   const eventCacheRef = useRef<Map<string, TimelineEvent>>(new Map());
   const refreshTimelineRef = useRef<() => Promise<void>>(null);
+  const translationLockRef = useRef<boolean>(false);
+  const realtimeErrorLogLast = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -929,6 +931,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     setUnreadCountByUserId(byUser);
   }, [currentUserId, fetchUnreadCountByUser]);
 
+  const setTranslationLock = useCallback((active: boolean) => {
+    translationLockRef.current = active;
+  }, []);
+
   useEffect(() => {
     const messagesChannel = supabase
       .channel('messages-realtime')
@@ -958,7 +964,16 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         setUnreadCountByUserId(byUser);
       })
       .subscribe((status) => {
-        console.log('Realtime: Messages subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'messages';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Messages CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED') {
+          if (__DEV__) console.log('Realtime: Messages SUBSCRIBED');
+        }
       });
 
     const matchesChannel = supabase
@@ -1029,7 +1044,14 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         }
       })
       .subscribe((status) => {
-        console.log('Realtime: Matches subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'matches';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Matches CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED' && __DEV__) console.log('Realtime: Matches SUBSCRIBED');
       });
 
     const profilesChannel = supabase
@@ -1067,7 +1089,14 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         }
       })
       .subscribe((status) => {
-        console.log('Realtime: Profiles subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'profiles';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Profiles CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED' && __DEV__) console.log('Realtime: Profiles SUBSCRIBED');
       });
 
     const notificationsChannel = currentUserId ? supabase
@@ -1092,7 +1121,14 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         setNotifications(prev => [notif, ...prev]);
       })
       .subscribe((status) => {
-        console.log('Realtime: Notifications subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'notifications';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Notifications CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED' && __DEV__) console.log('Realtime: Notifications SUBSCRIBED');
       }) : null;
 
     const postsChannel = currentUserId ? supabase
@@ -1102,6 +1138,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         schema: 'public',
         table: 'posts',
       }, (payload) => {
+        if (translationLockRef.current) return;
         const row = payload.new as SupabasePost;
         if (row.user_id !== currentUserId) {
           refreshTimelineRef.current?.();
@@ -1130,7 +1167,14 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         });
       })
       .subscribe((status) => {
-        console.log('Realtime: Posts subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'posts';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Posts CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED' && __DEV__) console.log('Realtime: Posts SUBSCRIBED');
       }) : null;
 
     const eventsChannel = currentUserId ? supabase
@@ -1140,10 +1184,18 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         schema: 'public',
         table: 'events',
       }, () => {
+        if (translationLockRef.current) return;
         refreshTimelineRef.current?.();
       })
       .subscribe((status) => {
-        console.log('Realtime: Events subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          const k = 'events';
+          const now = Date.now();
+          if (!realtimeErrorLogLast.current[k] || now - realtimeErrorLogLast.current[k] > 60000) {
+            realtimeErrorLogLast.current[k] = now;
+            console.warn('Realtime: Events CHANNEL_ERROR (logged once/min)');
+          }
+        } else if (status === 'SUBSCRIBED' && __DEV__) console.log('Realtime: Events SUBSCRIBED');
       }) : null;
 
     return () => {
@@ -2266,5 +2318,6 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     totalUnreadMessageCount,
     refreshUnreadMessageCounts,
     isRTL: isRTL(language),
+    setTranslationLock,
   };
 });

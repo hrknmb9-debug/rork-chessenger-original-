@@ -31,8 +31,15 @@ if (!global._supabaseSingleton) {
       persistSession: true,
       detectSessionInUrl: Platform.OS === 'web',
     },
+    realtime: {
+      params: { eventsPerSecond: 5 },
+    },
   });
-  console.log('supabaseClient: singleton created, platform=' + Platform.OS);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    const u = SUPABASE_URL ? `${SUPABASE_URL.slice(0, 30)}...` : '(missing)';
+    const k = SUPABASE_ANON_KEY ? `set (${SUPABASE_ANON_KEY.slice(0, 8)}...)` : '(missing)';
+    console.log('supabaseClient: URL=', u, 'ANON_KEY=', k, '| Realtime有効化確認: Supabase Dashboard > Database > Replication で該当テーブルの Realtime を ON にしてください');
+  }
 }
 
 // Both exports point to the same singleton — one GoTrueClient, one session, all requests share the auth token automatically.

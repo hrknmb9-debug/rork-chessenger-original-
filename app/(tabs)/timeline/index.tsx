@@ -62,11 +62,13 @@ function CommentItem({
   onReply,
   language,
   colors,
+  setTranslationLock,
 }: {
   comment: TimelineComment;
   onReply: (commentId: string) => void;
   language: string;
   colors: ThemeColors;
+  setTranslationLock?: (active: boolean) => void;
 }) {
   const [translationState, setTranslationState] = useState<{ localTranslatedContent: string | null; loading: boolean; renderKey?: number; displayReady: boolean }>({ localTranslatedContent: null, loading: false, displayReady: true });
   const commentText = language === 'en' && comment.contentEn ? comment.contentEn : comment.content;
@@ -84,7 +86,7 @@ function CommentItem({
   useEffect(() => {
     if (isManualTranslationActive) return;
     setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
-  }, [comment.id, commentText, language, isManualTranslationActive]);
+  }, [comment.id, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -96,18 +98,21 @@ function CommentItem({
         setTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
           setTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
+          setTranslationLock?.(false);
         }, 0);
       });
     });
     return () => sub.remove();
-  }, [comment.id]);
+  }, [comment.id, setTranslationLock]);
 
   const onTranslate = useCallback(async () => {
     if (translationState.loading || !commentText?.trim()) return;
     if (translationState.localTranslatedContent) {
       setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+      setTranslationLock?.(false);
       return;
     }
+    setTranslationLock?.(true);
     setTranslationState(prev => ({ ...prev, loading: true }));
     let didSetResult = false;
     try {
@@ -117,6 +122,7 @@ function CommentItem({
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
           setTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+          setTranslationLock?.(false);
           if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (comment):', decoded.slice(0, 60));
           didSetResult = true;
         }
@@ -125,8 +131,9 @@ function CommentItem({
       }
     } finally {
       if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
+      setTranslationLock?.(false);
     }
-  }, [commentText, language, translationState.localTranslatedContent, translationState.loading]);
+  }, [commentText, language, translationState.localTranslatedContent, translationState.loading, setTranslationLock]);
 
   return (
     <View>
@@ -193,7 +200,7 @@ function PostCard({
   language: string;
 }) {
   const { colors } = useTheme();
-  const { currentUserId, joinEvent, leaveEvent } = useChess();
+  const { currentUserId, joinEvent, leaveEvent, setTranslationLock } = useChess();
   const [showComments, setShowComments] = useState<boolean>(false);
   const [commentText, setCommentText] = useState<string>('');
   const [replyToId, setReplyToId] = useState<string | null>(null);
@@ -242,7 +249,7 @@ function PostCard({
   useEffect(() => {
     if (isManualTranslationActive) return;
     setContentTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
-  }, [post.id, contentText, language, isManualTranslationActive]);
+  }, [post.id, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -255,6 +262,7 @@ function PostCard({
         setContentTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
           setContentTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
+          setTranslationLock?.(false);
         }, 0);
       });
     });
@@ -265,8 +273,10 @@ function PostCard({
     if (contentTranslationState.loading || !contentText?.trim()) return;
     if (contentTranslationState.localTranslatedContent) {
       setContentTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+      setTranslationLock?.(false);
       return;
     }
+    setTranslationLock?.(true);
     setContentTranslationState(prev => ({ ...prev, loading: true }));
     let didSetResult = false;
     try {
@@ -277,6 +287,7 @@ function PostCard({
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
           setContentTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+          setTranslationLock?.(false);
           if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (post):', decoded.slice(0, 60));
           didSetResult = true;
         }
@@ -285,8 +296,9 @@ function PostCard({
       }
     } finally {
       if (!didSetResult) setContentTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
+      setTranslationLock?.(false);
     }
-  }, [contentText, language, post.id, contentTranslationState.localTranslatedContent, contentTranslationState.loading]);
+  }, [contentText, language, post.id, contentTranslationState.localTranslatedContent, contentTranslationState.loading, setTranslationLock]);
 
   const targetLang = getTargetLanguage(language);
   useEffect(() => {
@@ -565,6 +577,7 @@ function PostCard({
               onReply={(cId) => { setReplyToId(cId); setCommentText(`@${c.author.name} `); }}
               language={language}
               colors={colors}
+              setTranslationLock={setTranslationLock}
             />
           ))}
           {replyToId && (
@@ -597,7 +610,7 @@ function PostCard({
 export default function TimelineScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { timelinePosts, toggleLike, addComment, addTimelinePost, deleteTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId } = useChess();
+  const { timelinePosts, toggleLike, addComment, addTimelinePost, deleteTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId, setTranslationLock } = useChess();
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'events' | 'my'>('all');
   const [newPostText, setNewPostText] = useState<string>('');

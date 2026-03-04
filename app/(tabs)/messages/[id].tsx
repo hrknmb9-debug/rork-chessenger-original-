@@ -233,6 +233,7 @@ function MessageBubble({
   onLongPress,
   onImagePress,
   reactions,
+  setTranslationLock,
 }: {
   item: Message;
   isMe: boolean;
@@ -245,6 +246,7 @@ function MessageBubble({
   onLongPress: () => void;
   onImagePress?: (url: string) => void;
   reactions: string[];
+  setTranslationLock?: (active: boolean) => void;
 }) {
   const [translationState, setTranslationState] = useState<{ localTranslatedContent: string | null; loading: boolean; renderKey?: number; displayReady: boolean }>({ localTranslatedContent: null, loading: false, displayReady: true });
   const { isImage, value } = decodeMessageContent(item.text);
@@ -262,7 +264,7 @@ function MessageBubble({
   useEffect(() => {
     if (isManualTranslationActive) return;
     setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
-  }, [item.text, item.id, language, isManualTranslationActive]);
+  }, [item.id, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -274,6 +276,7 @@ function MessageBubble({
         setTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
           setTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
+          setTranslationLock?.(false);
           if (__DEV__) {
             console.log('[translate:msg] Event received, applied');
             console.log('[translate:ios] DISPLAYING TEXT:', text?.slice(0, 60) ?? '(empty)');
@@ -282,7 +285,7 @@ function MessageBubble({
       });
     });
     return () => sub.remove();
-  }, [item.id]);
+  }, [item.id, setTranslationLock]);
   const imageUrl = isImage ? (value || (item.imageUrl ?? undefined)) : (item.imageUrl ?? undefined);
   const hasTranslatableText = !isImage && item.text?.trim().length > 0;
   const timeStr = getTimeAgo(item.timestamp, language);
@@ -291,8 +294,10 @@ function MessageBubble({
     if (translationState.loading || !hasTranslatableText) return;
     if (translationState.localTranslatedContent) {
       setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+      setTranslationLock?.(false);
       return;
     }
+    setTranslationLock?.(true);
     setTranslationState(prev => ({ ...prev, loading: true }));
     let didSetResult = false;
     try {
@@ -303,6 +308,7 @@ function MessageBubble({
         if (decoded.trim()) {
           if (Platform.OS !== 'ios') {
             setTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+            setTranslationLock?.(false);
             if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (msg):', decoded.slice(0, 60));
             didSetResult = true;
           }
@@ -313,8 +319,9 @@ function MessageBubble({
       }
     } finally {
       if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
+      setTranslationLock?.(false);
     }
-  }, [hasTranslatableText, item.text, language, translationState.localTranslatedContent, translationState.loading]);
+  }, [hasTranslatableText, item.text, language, translationState.localTranslatedContent, translationState.loading, setTranslationLock]);
 
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
@@ -444,7 +451,7 @@ export default function ChatScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { language, currentUserId, fetchPlayerProfile, refreshUnreadMessageCounts } = useChess();
+  const { language, currentUserId, fetchPlayerProfile, refreshUnreadMessageCounts, setTranslationLock } = useChess();
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
 
@@ -717,9 +724,10 @@ export default function ChatScreen() {
         onLongPress={() => setPickerTarget(item.msg.id)}
         onImagePress={setExpandedImageUrl}
         reactions={messageReactions[item.msg.id] ?? []}
+        setTranslationLock={setTranslationLock}
       />
     );
-  }, [chatPlayer, language, colors, styles, currentUserId, messageReactions]);
+  }, [chatPlayer, language, colors, styles, currentUserId, messageReactions, setTranslationLock]);
 
   // ── Loading ────────────────────────────────────────────────────────────────
 
