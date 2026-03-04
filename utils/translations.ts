@@ -377,6 +377,7 @@ const JA: Record<string, string> = {
   delete_post_desc: '本当にこの投稿を削除しますか？',
   delete_post: '削除',
   translating: '翻訳中...',
+  translation_failed: '翻訳に失敗しました',
   mark_read: '既読',
   today: '今日',
   yesterday: '昨日',
@@ -764,6 +765,7 @@ const EN: Record<string, string> = {
   delete_post_desc: 'Are you sure you want to delete this post?',
   delete_post: 'Delete',
   translating: 'Translating...',
+  translation_failed: 'Translation failed',
   mark_read: 'Mark read',
   today: 'Today',
   yesterday: 'Yesterday',
@@ -774,7 +776,7 @@ const EN: Record<string, string> = {
 
 /** 12言語のみ（SUPPORTED_LANGUAGESと一致） */
 const EXTRA_LANGS: Record<string, Record<string, string>> = {
-  zh: { tab_search: '搜索', tab_timeline: '时间线', tab_messages: '消息', tab_matches: '对局', tab_profile: '个人资料', login: '登录', register: '注册', settings: '设置', save: '保存', cancel: '取消', send: '发送', back: '返回', logout: '退出登录', beginner: '初学者', intermediate: '中级', advanced: '高级', expert: '专家', online: '在线', post: '发帖', comment: '评论', like: '点赞', reply: '回复', messages: '消息', notifications: '通知', matches: '对局', translate: '翻译', original: '原文', translating: '翻译中...', translated_by_ai: '（AI翻译）' },
+  zh: { tab_search: '搜索', tab_timeline: '时间线', tab_messages: '消息', tab_matches: '对局', tab_profile: '个人资料', login: '登录', register: '注册', settings: '设置', save: '保存', cancel: '取消', send: '发送', back: '返回', logout: '退出登录', beginner: '初学者', intermediate: '中级', advanced: '高级', expert: '专家', online: '在线', post: '发帖', comment: '评论', like: '点赞', reply: '回复', messages: '消息', notifications: '通知', matches: '对局', translate: '翻译', original: '原文', translating: '翻译中...', translated_by_ai: '（AI翻译）', translation_failed: '翻译失败' },
   hi: { tab_search: 'खोजें', tab_timeline: 'टाइमलाइन', tab_messages: 'संदेश', tab_matches: 'मैच', tab_profile: 'प्रोफ़ाइल', login: 'लॉगिन', register: 'रजिस्टर', settings: 'सेटिंग्स', save: 'सेव', cancel: 'रद्द', send: 'भेजें', back: 'वापस', logout: 'लॉगआउट', online: 'ऑनलाइन', post: 'पोस्ट', comment: 'टिप्पणी', like: 'पसंद', reply: 'जवाब', messages: 'संदेश', notifications: 'सूचनाएं', matches: 'मैच', translate: 'अनुवाद', original: 'मूल', translating: 'अनुवाद हो रहा है...', translated_by_ai: '（AI द्वारा अनुवादित）' },
   es: { tab_search: 'Buscar', tab_timeline: 'Línea', tab_messages: 'Mensajes', tab_matches: 'Partidas', tab_profile: 'Perfil', login: 'Iniciar sesión', register: 'Registrarse', settings: 'Ajustes', save: 'Guardar', cancel: 'Cancelar', send: 'Enviar', back: 'Volver', logout: 'Cerrar sesión', beginner: 'Principiante', intermediate: 'Intermedio', advanced: 'Avanzado', expert: 'Experto', online: 'En línea', post: 'Publicar', comment: 'Comentar', like: 'Me gusta', reply: 'Responder', messages: 'Mensajes', notifications: 'Notificaciones', matches: 'Partidas', translate: 'Traducir', original: 'Original', translating: 'Traduciendo...', translated_by_ai: '(Traducido por IA)' },
   ar: { tab_search: 'بحث', tab_timeline: 'الجدول', tab_messages: 'رسائل', tab_matches: 'مباريات', tab_profile: 'الملف', login: 'تسجيل الدخول', register: 'تسجيل', settings: 'الإعدادات', save: 'حفظ', cancel: 'إلغاء', send: 'إرسال', back: 'رجوع', logout: 'تسجيل الخروج', online: 'متصل', post: 'نشر', comment: 'تعليق', like: 'إعجاب', reply: 'رد', messages: 'رسائل', notifications: 'إشعارات', matches: 'مباريات', translate: 'ترجمة', original: 'أصلي', translating: 'جاري الترجمة...', translated_by_ai: '(ترجمة بالذكاء الاصطناعي)' },

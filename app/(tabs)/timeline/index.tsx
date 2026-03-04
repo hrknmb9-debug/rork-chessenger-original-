@@ -84,7 +84,9 @@ function CommentItem({
       const result = await translateText(commentText, getTargetLanguage(language), session?.access_token);
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
-        if (decoded.trim() && decoded.trim() !== commentText?.trim()) setTranslated(decoded);
+        if (decoded.trim()) setTranslated(decoded);
+      } else if ('error' in result) {
+        Alert.alert(t('error', language), t('translation_failed', language));
       }
     } finally {
       setTranslating(false);
@@ -198,17 +200,16 @@ function PostCard({
       return;
     }
     setIsTranslating(true);
-    // 翻訳中は元テキストを表示し続ける（テキストが消えない）
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const targetLang = getTargetLanguage(language);
       const result = await translateText(contentText, targetLang, session?.access_token);
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
-        if (decoded.trim() && decoded.trim() !== contentText?.trim()) setTranslatedContent(decoded);
+        if (decoded.trim()) setTranslatedContent(decoded);
+      } else if ('error' in result) {
+        Alert.alert(t('error', language), t('translation_failed', language));
       }
-    } catch {
-      // ignore
     } finally {
       setIsTranslating(false);
     }

@@ -270,8 +270,11 @@ function MessageBubble({
       const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
-        if (decoded.trim() && decoded.trim() !== item.text?.trim()) setTranslatedText(decoded);
-      } else if ('error' in result && __DEV__) console.warn('[translate]', result.error);
+        if (decoded.trim()) setTranslatedText(decoded);
+      } else if ('error' in result) {
+        if (__DEV__) console.warn('[translate]', result.error);
+        Alert.alert(t('error', language), t('translation_failed', language));
+      }
     } finally {
       setIsTranslating(false);
     }
