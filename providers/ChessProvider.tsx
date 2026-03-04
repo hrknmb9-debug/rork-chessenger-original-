@@ -68,6 +68,49 @@ interface SupabasePost {
   created_at: string;
 }
 
+async function fillMissingEventDetails(
+  built: TimelinePost[],
+  postsData: SupabasePost[],
+  client: ReturnType<typeof supabase>
+): Promise<TimelinePost[]> {
+  const missingIds = built.filter(p => (p.type as string) === 'event' && !p.event).map(p => p.id);
+  if (missingIds.length === 0) return built;
+  let result = built;
+  for (const postId of missingIds) {
+    const { data: evRow } = await client.from('events').select('*').eq('post_id', postId).maybeSingle();
+    if (!evRow) continue;
+    const { data: epRows } = await client.from('event_participants').select('user_id').eq('event_id', evRow.id);
+    const participants = (epRows ?? []).map((r: { user_id: string }) => r.user_id);
+    let date = (evRow.date as string) ?? '';
+    let time = (evRow.time as string) ?? '';
+    const eventAt = evRow.event_at as string | null | undefined;
+    if ((!date || !time) && eventAt) {
+      const d = new Date(eventAt);
+      if (!Number.isNaN(d.getTime())) {
+        date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    const supabasePost = postsData.find((p: SupabasePost) => p.id === postId);
+    const post = result.find(p => p.id === postId);
+    const timelineEvent: TimelineEvent = {
+      id: evRow.id as string,
+      userId: supabasePost?.user_id ?? post?.author?.id ?? '',
+      title: (evRow.title as string) ?? post?.content ?? '',
+      date,
+      time,
+      location: (evRow.location as string) ?? '',
+      maxParticipants: (evRow.max_participants as number) ?? 10,
+      participants,
+      createdAt: (evRow.created_at as string) ?? post?.createdAt ?? '',
+      deadlineAt: (evRow.deadline_at as string) ?? undefined,
+      isClosed: !!(evRow.closed_at as string | null),
+    };
+    result = result.map(p => p.id === postId ? { ...p, event: timelineEvent } : p);
+  }
+  return result;
+}
+
 interface SupabaseComment {
   id: string;
   post_id: string;
@@ -704,18 +747,19 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             eventParticipantsData = epData ?? [];
           }
 
-          const built = await buildTimelinePosts(
-            postsData,
-            commentsData ?? [],
-            likesData ?? [],
-            eventsData ?? [],
-            eventParticipantsData,
-            blockedIds
-          );
-          setTimelinePosts(prev =>
-            applyEventCacheToPosts(mergeRecentOwnPosts(userId, built, prev, RECENT_OWN_POST_WINDOW_MS), prev)
-          );
-          console.log('ChessProvider: Loaded', built.length, 'timeline posts from Supabase');
+        let built = await buildTimelinePosts(
+          postsData,
+          commentsData ?? [],
+          likesData ?? [],
+          eventsData ?? [],
+          eventParticipantsData,
+          blockedIds
+        );
+        built = await fillMissingEventDetails(built, postsData, supabase);
+        setTimelinePosts(prev =>
+          applyEventCacheToPosts(mergeRecentOwnPosts(userId, built, prev, RECENT_OWN_POST_WINDOW_MS), prev)
+        );
+        console.log('ChessProvider: Loaded', built.length, 'timeline posts from Supabase');
         } else if (postsData && postsData.length === 0) {
           setTimelinePosts(prev => {
             const merged = mergeRecentOwnPosts(userId, [], prev, RECENT_OWN_POST_WINDOW_MS);
@@ -1198,7 +1242,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           epData = data ?? [];
         }
 
-        const built = await buildTimelinePosts(
+        let built = await buildTimelinePosts(
           postsData,
           commentsData ?? [],
           likesData ?? [],
@@ -1206,6 +1250,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           epData,
           blockedUsers
         );
+        built = await fillMissingEventDetails(built, postsData, supabase);
         setTimelinePosts(prev =>
           applyEventCacheToPosts(mergeRecentOwnPosts(userId, built, prev, RECENT_OWN_POST_WINDOW_MS), prev)
         );
