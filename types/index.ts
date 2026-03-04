@@ -73,7 +73,7 @@ export interface TimelineEvent {
   createdAt: string;
   /** 募集締め切り日時（ISO）。過ぎているか closed_at が設定されていると参加不可 */
   deadlineAt?: string | null;
-  /** 手動で締め切られた日時（設定時は参加不可） */
+  /** 締切済みフラグ（closed_at 設定または deadline_at 経過で true） */
   isClosed?: boolean;
 }
 
