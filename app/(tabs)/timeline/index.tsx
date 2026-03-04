@@ -68,7 +68,7 @@ function CommentItem({
   language: string;
   colors: ThemeColors;
 }) {
-  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean }>({ data: null, loading: false });
+  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
   const commentText = language === 'en' && comment.contentEn ? comment.contentEn : comment.content;
   const originalText = decodeForDisplay(commentText ?? '');
   const displayText = decodeForDisplay(translationState.data ?? originalText);
@@ -85,7 +85,7 @@ function CommentItem({
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => {
-          setTranslationState({ data: text || null, loading: false });
+          setTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
         }, 0);
       });
     });
@@ -106,7 +106,7 @@ function CommentItem({
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
-          setTranslationState({ data: decoded, loading: false });
+          setTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
           didSetResult = true;
         }
       } else if ('error' in result) {
@@ -123,10 +123,12 @@ function CommentItem({
         <SafeImage uri={comment.author.avatar} name={comment.author.name} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surfaceLight }} contentFit="cover" />
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
-          <Text key={`comment-${comment.id}-${translationState.loading ? 'l' : translationState.data ? 't' : 'o'}`} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
-          {translationState.data != null && translationState.data.trim() !== (commentText ?? '').trim() && (
-            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
-          )}
+          <View key={translationState.renderKey ?? `comment-${comment.id}`}>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
+            {translationState.data != null && translationState.data.trim() !== (commentText ?? '').trim() && (
+              <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
             <Pressable onPress={() => onReply(comment.id)}>
               <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>{t('reply', language)}</Text>
@@ -182,7 +184,7 @@ function PostCard({
   const [showComments, setShowComments] = useState<boolean>(false);
   const [commentText, setCommentText] = useState<string>('');
   const [replyToId, setReplyToId] = useState<string | null>(null);
-  const [contentTranslationState, setContentTranslationState] = useState<{ data: string | null; loading: boolean }>({ data: null, loading: false });
+  const [contentTranslationState, setContentTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
   const [translatedEventTitle, setTranslatedEventTitle] = useState<string | null>(null);
   const [translatedEventLocation, setTranslatedEventLocation] = useState<string | null>(null);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -228,7 +230,7 @@ function PostCard({
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => {
-          setContentTranslationState({ data: text || null, loading: false });
+          setContentTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
         }, 0);
       });
     });
@@ -250,7 +252,7 @@ function PostCard({
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
-          setContentTranslationState({ data: decoded, loading: false });
+          setContentTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
           didSetResult = true;
         }
       } else if ('error' in result) {
@@ -462,12 +464,14 @@ function PostCard({
       )}
 
       <View style={{ marginBottom: 12 }}>
-        <Text key={`post-${post.id}-${contentTranslationState.loading ? 'l' : contentTranslationState.data ? 't' : 'o'}`} style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
-          {displayContent}
-        </Text>
-        {contentTranslationState.data != null && contentTranslationState.data.trim() !== (contentText ?? '').trim() && (
-          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
-        )}
+        <View key={contentTranslationState.renderKey ?? `post-${post.id}`}>
+          <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
+            {displayContent}
+          </Text>
+          {contentTranslationState.data != null && contentTranslationState.data.trim() !== (contentText ?? '').trim() && (
+            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
+          )}
+        </View>
         <Pressable
           onPress={handleTranslate}
           disabled={contentTranslationState.loading}

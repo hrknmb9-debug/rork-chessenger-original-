@@ -246,7 +246,7 @@ function MessageBubble({
   onImagePress?: (url: string) => void;
   reactions: string[];
 }) {
-  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean }>({ data: null, loading: false });
+  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
   const { isImage, value } = decodeMessageContent(item.text);
   const originalText = decodeForDisplay(item.text ?? '');
   const displayText = decodeForDisplay(translationState.data ?? originalText);
@@ -263,7 +263,7 @@ function MessageBubble({
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => {
-          setTranslationState({ data: text || null, loading: false });
+          setTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
           if (__DEV__) console.log('[translate:msg] Event received, applied');
         }, 0);
       });
@@ -289,7 +289,7 @@ function MessageBubble({
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
           if (Platform.OS !== 'ios') {
-            setTranslationState({ data: decoded, loading: false });
+            setTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
             didSetResult = true;
           }
         }
@@ -367,8 +367,8 @@ function MessageBubble({
           ) : (isImage || imageUrl) && imageUrl ? (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
-            <>
-              <Text key={`msg-${item.id}-${translationState.loading ? 'l' : translationState.data ? 't' : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+            <View key={translationState.renderKey ?? `msg-${item.id}`}>
+              <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
                 {displayText}
               </Text>
               {translationState.data != null && translationState.data.trim() !== (item.text ?? '').trim() && (
@@ -376,7 +376,7 @@ function MessageBubble({
                   {t('translated_by_ai', language)}
                 </Text>
               )}
-            </>
+            </View>
           )}
         </Pressable>
 

@@ -53,13 +53,52 @@ function sanitizePayload(text: string): string {
     .trim();
 }
 
-/** Base64 を UTF-8 文字列にデコード */
+/** Base64 を UTF-8 文字列にデコード（atob → Buffer → 手動デコードの三段構え） */
 function decodeBase64ToUtf8(base64: string): string {
+  const toUtf8 = (bytes: Uint8Array): string => {
+    try {
+      return new TextDecoder().decode(bytes);
+    } catch {
+      return '';
+    }
+  };
   try {
-    const binary = globalThis.atob?.(base64) ?? (typeof atob !== 'undefined' ? atob(base64) : '');
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
+    const atobFn = globalThis.atob ?? (typeof atob !== 'undefined' ? atob : null);
+    if (atobFn) {
+      const binary = atobFn(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return toUtf8(bytes);
+    }
+  } catch {
+    /* atob failed */
+  }
+  try {
+    const B = (globalThis as { Buffer?: { from: (s: string, enc: string) => { toString: (enc: string) => string } } }).Buffer;
+    if (B?.from) {
+      return B.from(base64, 'base64').toString('utf8');
+    }
+  } catch {
+    /* Buffer failed */
+  }
+  try {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const lookup = new Uint8Array(256);
+    for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+    const len = base64.replace(/=+$/, '').length;
+    const byteLen = (len * 3) >> 2;
+    const bytes = new Uint8Array(byteLen);
+    let p = 0;
+    for (let i = 0; i < len; i += 4) {
+      const a = lookup[base64.charCodeAt(i)] ?? 0;
+      const b = lookup[base64.charCodeAt(i + 1)] ?? 0;
+      const c = i + 2 < len ? (lookup[base64.charCodeAt(i + 2)] ?? 0) : 0;
+      const d = i + 3 < len ? (lookup[base64.charCodeAt(i + 3)] ?? 0) : 0;
+      bytes[p++] = (a << 2) | (b >> 4);
+      if (p < byteLen) bytes[p++] = ((b & 15) << 4) | (c >> 2);
+      if (p < byteLen) bytes[p++] = ((c & 3) << 6) | d;
+    }
+    return toUtf8(bytes);
   } catch (e) {
     if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Base64 decode failed:', e);
     return '';
@@ -409,19 +448,24 @@ async function translateViaEdgeFunction(
         if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] API error:', err);
         return { text }; // フォールバック: 元テキスト
       }
-      // Base64バイパス: translatedTextBase64 優先でデコード
+      // Base64 優先 → 生テキスト フォールバック（空文字ガード）
       const base64 = data.translatedTextBase64 as string | undefined;
+      const raw = (data.translatedText ?? data.text) as string | undefined;
+      let finalText = '';
       if (base64 && typeof base64 === 'string') {
         const decoded = decodeBase64ToUtf8(base64);
-        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
-        if (decoded) return { text: safeDecodeTranslated(decoded) };
+        if (__DEV__ && Platform.OS === 'ios') {
+          console.log('[translate:ios] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
+          console.log('[translate:ios] FINAL TEXT:', decoded || '(empty from Base64)');
+        }
+        if (decoded?.trim()) finalText = safeDecodeTranslated(decoded);
       }
-      const raw = (data.translatedText ?? data.text) as string | undefined;
-      if (raw && typeof raw === 'string') {
-        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] RAW RESULT:', raw?.slice(0, 80) ?? '(empty)');
-        return { text: safeDecodeTranslated(raw) };
+      if (!finalText && raw && typeof raw === 'string') {
+        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] FINAL TEXT (from translatedText):', raw?.slice(0, 80) ?? '(empty)');
+        finalText = safeDecodeTranslated(raw);
       }
-      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] RAW RESULT: (none found in response)');
+      if (finalText) return { text: finalText };
+      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] No valid translatedTextBase64 nor translatedText');
       return { text };
     }
 
@@ -447,12 +491,15 @@ async function translateViaEdgeFunction(
         return { text };
       }
       const base64 = data.translatedTextBase64 as string | undefined;
-      if (base64 && typeof base64 === 'string') {
-        const decoded = decodeBase64ToUtf8(base64);
-        if (decoded) return { text: safeDecodeTranslated(decoded) };
-      }
       const raw = (data.translatedText ?? data.text) as string | undefined;
-      if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
+      let finalText = '';
+      if (base64 && typeof base64 === 'string') {
+        finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
+      }
+      if (!finalText && raw && typeof raw === 'string') {
+        finalText = safeDecodeTranslated(raw);
+      }
+      if (finalText) return { text: finalText };
       return { text };
     } catch (e) {
       if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] fetch failed:', e);
@@ -469,10 +516,12 @@ async function translateViaEdgeFunction(
       });
       if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
       if (!error) {
-        const raw = data?.translatedText ?? data?.text;
-        if (raw && typeof raw === 'string') {
-          return { text: safeDecodeTranslated(raw) };
-        }
+        const base64 = data?.translatedTextBase64 as string | undefined;
+        const raw = (data?.translatedText ?? data?.text) as string | undefined;
+        let finalText = '';
+        if (base64 && typeof base64 === 'string') finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
+        if (!finalText && raw && typeof raw === 'string') finalText = safeDecodeTranslated(raw);
+        if (finalText) return { text: finalText };
       }
     } catch (e) {
       if (TRANSLATE_DEBUG) console.warn('[translate] invoke exception:', e);
