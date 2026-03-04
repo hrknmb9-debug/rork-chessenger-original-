@@ -246,26 +246,24 @@ function MessageBubble({
   onImagePress?: (url: string) => void;
   reactions: string[];
 }) {
-  const [translatedText, setTranslatedText] = useState<string | null>(null);
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [renderKey, setRenderKey] = useState(0); // 可能性3: 翻訳完了時に更新し iOS 強制再描画
+  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean }>({ data: null, loading: false });
   const { isImage, value } = decodeMessageContent(item.text);
+  const originalText = decodeForDisplay(item.text ?? '');
+  const displayText = decodeForDisplay(translationState.data ?? originalText);
 
-  // item.text や language 変更時に翻訳をリセット（iOS再描画保証）
   useEffect(() => {
-    setTranslatedText(null);
-    setRenderKey(0);
+    setTranslationState({ data: null, loading: false });
   }, [item.text, item.id, language]);
 
-  // グローバルイベント: iOS で翻訳完了をプル型受信（UIデッドロック回避）
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
     const sub = onTranslationComplete((e) => {
       if (e.itemId !== item.id) return;
+      const text = decodeForDisplay(e.text);
+      if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
         setTimeout(() => {
-          setTranslatedText(decodeForDisplay(e.text));
-          setRenderKey(k => k + 1);
+          setTranslationState({ data: text || null, loading: false });
           if (__DEV__) console.log('[translate:msg] Event received, applied');
         }, 0);
       });
@@ -277,23 +275,22 @@ function MessageBubble({
   const timeStr = getTimeAgo(item.timestamp, language);
 
   const handleTranslate = useCallback(async () => {
-    if (isTranslating || !hasTranslatableText) return;
-    if (translatedText) {
-      setTranslatedText(null);
+    if (translationState.loading || !hasTranslatableText) return;
+    if (translationState.data) {
+      setTranslationState({ data: null, loading: false });
       return;
     }
-    setIsTranslating(true);
+    setTranslationState(prev => ({ ...prev, loading: true }));
+    let didSetResult = false;
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const result = await translateText(item.text, getTargetLanguage(language), session?.access_token, { itemId: item.id });
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
-          if (Platform.OS === 'ios') {
-            // iOS: EventEmitter のプル型で更新（コールバックでは setState しない）
-          } else {
-            setTranslatedText(decoded);
-            setRenderKey(prev => prev + 1);
+          if (Platform.OS !== 'ios') {
+            setTranslationState({ data: decoded, loading: false });
+            didSetResult = true;
           }
         }
       } else if ('error' in result) {
@@ -301,11 +298,9 @@ function MessageBubble({
         Alert.alert(t('error', language), t('translation_failed', language));
       }
     } finally {
-      setIsTranslating(false);
+      if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false }));
     }
-  }, [hasTranslatableText, item.text, language, translatedText, isTranslating]);
-
-  const displayText = (translatedText != null ? decodeForDisplay(translatedText) : decodeForDisplay(item.text ?? '')) ?? '';
+  }, [hasTranslatableText, item.text, language, translationState.data, translationState.loading]);
 
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
@@ -373,10 +368,10 @@ function MessageBubble({
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
             <>
-              <Text key={`msg-${item.id}-${isTranslating ? 'l' : translatedText ? `t-${renderKey}` : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+              <Text key={`msg-${item.id}-${translationState.loading ? 'l' : translationState.data ? 't' : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
                 {displayText}
               </Text>
-              {translatedText && displayText.trim() !== (item.text ?? '').trim() && (
+              {translationState.data != null && translationState.data.trim() !== (item.text ?? '').trim() && (
                 <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther, { fontSize: 10, opacity: 0.8, marginTop: 2 }]}>
                   {t('translated_by_ai', language)}
                 </Text>
@@ -387,14 +382,14 @@ function MessageBubble({
 
         {/* Translate button - for text messages from others */}
         {hasTranslatableText && !isMe && isLast && (
-          <Pressable onPress={handleTranslate} disabled={isTranslating} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginLeft: 4, paddingVertical: 2 }}>
-            {isTranslating ? (
+          <Pressable onPress={handleTranslate} disabled={translationState.loading} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, marginLeft: 4, paddingVertical: 2 }}>
+            {translationState.loading ? (
               <ActivityIndicator size="small" color={colors.gold} style={{ transform: [{ scale: 0.8 }] }} />
             ) : (
               <Languages size={12} color={colors.textMuted} />
             )}
             <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>
-              {isTranslating ? t('translating', language) : translatedText ? t('original', language) : t('translate', language)}
+              {translationState.loading ? t('translating', language) : translationState.data ? t('original', language) : t('translate', language)}
             </Text>
           </Pressable>
         )}

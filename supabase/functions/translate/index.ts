@@ -31,8 +31,19 @@ async function translateGoogle(text: string, target: string, source: string, api
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    return data?.data?.translations?.[0]?.translatedText ?? null;
+    const rawText = await res.text();
+    let result: string | null = null;
+    try {
+      const data = rawText?.trim() ? JSON.parse(rawText) : null;
+      result = data?.data?.translations?.[0]?.translatedText ?? data?.translations?.[0]?.translatedText ?? null;
+    } catch {
+      /* parse failed */
+    }
+    if (!result && rawText?.trim()) {
+      const m = rawText.match(/"translatedText"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (m?.[1]) result = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    }
+    return result;
   } catch {
     return null;
   }

@@ -74,6 +74,9 @@ export function onTranslationComplete(cb: (p: TranslationCompletePayload) => voi
   return { remove: () => { const i = translationListeners.indexOf(cb); if (i >= 0) translationListeners.splice(i, 1); } };
 }
 function emitTranslationComplete(payload: TranslationCompletePayload): void {
+  if (__DEV__ && Platform.OS === 'ios' && (!payload.text || payload.text.trim() === '')) {
+    console.error('[translate:ios] ERROR: Result is empty or undefined');
+  }
   translationListeners.forEach(l => { try { l(payload); } catch { /* ignore */ } });
 }
 
@@ -410,12 +413,15 @@ async function translateViaEdgeFunction(
       const base64 = data.translatedTextBase64 as string | undefined;
       if (base64 && typeof base64 === 'string') {
         const decoded = decodeBase64ToUtf8(base64);
-        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Decoded Base64:', decoded.slice(0, 60) + (decoded.length > 60 ? '...' : ''));
+        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
         if (decoded) return { text: safeDecodeTranslated(decoded) };
       }
       const raw = (data.translatedText ?? data.text) as string | undefined;
-      if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] no translatedText/Base64 field → fallback');
+      if (raw && typeof raw === 'string') {
+        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] RAW RESULT:', raw?.slice(0, 80) ?? '(empty)');
+        return { text: safeDecodeTranslated(raw) };
+      }
+      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] RAW RESULT: (none found in response)');
       return { text };
     }
 
@@ -564,7 +570,10 @@ export async function translateText(
       if (decoded.trim() && decoded.trim() !== sanitized.trim()) {
         setCache(sanitized, normalizedTarget, sourceLang, decoded);
       }
-      if (options?.itemId) emitTranslationComplete({ itemId: options.itemId, text: decoded });
+      if (options?.itemId) {
+        if (__DEV__ && Platform.OS === 'ios' && !decoded?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
+        emitTranslationComplete({ itemId: options.itemId, text: decoded });
+      }
       return { text: decoded };
     }
 
@@ -575,7 +584,10 @@ export async function translateText(
       if (decoded.trim() && decoded.trim() !== sanitized.trim()) {
         setCache(sanitized, normalizedTarget, sourceLang, decoded);
       }
-      if (options?.itemId) emitTranslationComplete({ itemId: options.itemId, text: decoded });
+      if (options?.itemId) {
+        if (__DEV__ && Platform.OS === 'ios' && !decoded?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
+        emitTranslationComplete({ itemId: options.itemId, text: decoded });
+      }
       return { text: decoded };
     }
 
