@@ -40,6 +40,13 @@ const CACHE_MAX_ENTRIES = 500;
 const CACHE_VERSION = 7;
 const TRANSLATE_DEBUG = __DEV__;
 
+// #region agent log
+const DEBUG_LOG = (msg: string, data: Record<string, unknown>) => {
+  try { console.dir({ [msg]: data }, { depth: 5 }); } catch {}
+  try { fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'translateText',message:msg,data,timestamp:Date.now()})}).catch(()=>{}); } catch {}
+};
+// #endregion
+
 export type TranslateResult = { text: string } | { error: string };
 export type TranslateOptions = { itemId?: string };
 
@@ -303,16 +310,20 @@ function fetchJsonViaXHRText(
     xhr.onload = () => {
       const status = xhr.status;
       const raw = xhr.responseText ?? xhr.response;
-      if (__DEV__ && Platform.OS === 'ios') {
-        console.log('[translate:ios] XHR onload status=', status);
-        console.log('[translate:ios] XHR raw response (preview):', typeof raw === 'string' ? raw.slice(0, 200) + (raw.length > 200 ? '...' : '') : String(raw));
+      const rawStr = typeof raw === 'string' ? raw : String(raw);
+      if (__DEV__) {
+        console.log('[translate] XHR onload status=', status, 'Platform=', Platform.OS);
+        console.dir({ xhrResponse: { status, rawPreview: rawStr.slice(0, 400), rawLen: rawStr.length } }, { depth: 3 });
       }
+      // #region agent log
+      try { const p = JSON.parse(rawStr); DEBUG_LOG('XHR_RAW_RESPONSE', { status, platform: Platform.OS, rawPreview: rawStr.slice(0, 500), rawLen: rawStr.length, keys: Object.keys(p ?? {}) }); } catch { DEBUG_LOG('XHR_RAW_RESPONSE', { status, platform: Platform.OS, rawPreview: rawStr.slice(0, 500), parseFailed: true }); }
+      // #endregion
       if (status >= 200 && status < 300) {
         if (typeof raw === 'string' && raw.trim()) {
           try {
             const text = raw.trim();
             const parsed = JSON.parse(text) as Record<string, unknown>;
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] JSON parse OK');
+            if (__DEV__) console.log('[translate] JSON parse OK, keys=', Object.keys(parsed));
             resolve(parsed);
           } catch (e) {
             if (TRANSLATE_DEBUG) console.warn('[translate:ios] XHR JSON parse failed:', e, 'raw preview:', String(raw).slice(0, 100));
@@ -440,39 +451,59 @@ async function translateViaEdgeFunction(
         }
       }
       if (!data) {
-        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] empty/invalid response → fallback to original text');
-        return { text }; // 可能性1フォールバック: JSON壊れ時は元テキストを返す
+        // #region agent log
+        DEBUG_LOG('RN_EMPTY_DATA', { platform: Platform.OS });
+        // #endregion
+        if (__DEV__) console.warn('[translate] empty/invalid response → fallback');
+        return { text };
       }
       const err = data.error as string | undefined;
       if (err) {
-        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] API error:', err);
-        return { text }; // フォールバック: 元テキスト
+        // #region agent log
+        DEBUG_LOG('RN_API_ERROR', { platform: Platform.OS, error: err });
+        // #endregion
+        if (__DEV__) console.warn('[translate] API error:', err);
+        return { text };
       }
-      // Base64 優先 → 生テキスト フォールバック（空文字ガード）
+      // バイパステスト: translatedText を優先（Base64 デコードをスキップ）
+      const TRANSLATE_RAW_FIRST = true; // 一時 true: 生テキスト優先で Base64 不一致を検証
       const base64 = data.translatedTextBase64 as string | undefined;
       const raw = (data.translatedText ?? data.text) as string | undefined;
+      // #region agent log
+      DEBUG_LOG('RN_PARSE_START', { platform: Platform.OS, hasBase64: !!base64, hasRaw: !!raw, rawType: typeof raw, bodyKeys: Object.keys(data) });
+      // #endregion
+      if (__DEV__) console.dir({ translateResponse: data, hasBase64: !!base64, hasRaw: !!raw });
       let finalText = '';
-      if (base64 && typeof base64 === 'string') {
-        const decoded = decodeBase64ToUtf8(base64);
-        if (__DEV__ && Platform.OS === 'ios') {
-          console.log('[translate:ios] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
-          console.log('[translate:ios] FINAL TEXT:', decoded || '(empty from Base64)');
-        }
-        if (decoded?.trim()) finalText = safeDecodeTranslated(decoded);
-      }
-      if (!finalText && raw && typeof raw === 'string') {
-        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] FINAL TEXT (from translatedText):', raw?.slice(0, 80) ?? '(empty)');
+      if (TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
+        if (__DEV__) console.log('[translate] BYPASS: using translatedText (raw first)');
         finalText = safeDecodeTranslated(raw);
       }
+      if (!finalText && base64 && typeof base64 === 'string') {
+        const decoded = decodeBase64ToUtf8(base64);
+        // #region agent log
+        DEBUG_LOG('RN_BASE64_DECODE', { platform: Platform.OS, decodedLen: decoded?.length ?? 0, decodedPreview: decoded?.slice(0, 100) ?? '(empty)' });
+        // #endregion
+        if (__DEV__) console.log('[translate] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
+        if (decoded?.trim()) finalText = safeDecodeTranslated(decoded);
+      }
+      if (!finalText && !TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
+        finalText = safeDecodeTranslated(raw);
+      }
+      // #region agent log
+      DEBUG_LOG('RN_FINAL', { platform: Platform.OS, finalLen: finalText?.length ?? 0, finalPreview: finalText?.slice(0, 80) ?? '(none)' });
+      // #endregion
       if (finalText) return { text: finalText };
-      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] No valid translatedTextBase64 nor translatedText');
+      if (__DEV__) console.warn('[translate] No valid translatedTextBase64 nor translatedText');
       return { text };
     }
 
     try {
       const res = await fetch(url, { method: 'POST', headers, body: bodyStr });
-      // Web: res.text() + JSON.parse でバイナリ混入を排除（二段構えバリデーション）
       const rawText = await res.text();
+      // #region agent log
+      DEBUG_LOG('WEB_FETCH_RESPONSE', { status: res.status, rawPreview: rawText?.slice(0, 500), rawLen: rawText?.length });
+      // #endregion
+      if (__DEV__) console.dir({ webTranslateRes: { status: res.status, bodyPreview: rawText?.slice(0, 300) } }, { depth: 3 });
       let data: Record<string, unknown> | null = null;
       if (rawText?.trim()) {
         try {
@@ -482,23 +513,31 @@ async function translateViaEdgeFunction(
         }
       }
       if (!data) {
-        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Web path empty response → fallback');
+        // #region agent log
+        DEBUG_LOG('WEB_EMPTY_DATA', {});
+        // #endregion
         return { text };
       }
       const err = data.error as string | undefined;
       if (err) {
-        if (TRANSLATE_DEBUG) console.warn('[translate] API error:', err);
+        DEBUG_LOG('WEB_API_ERROR', { error: err });
         return { text };
       }
       const base64 = data.translatedTextBase64 as string | undefined;
       const raw = (data.translatedText ?? data.text) as string | undefined;
+      const TRANSLATE_RAW_FIRST = true;
+      DEBUG_LOG('WEB_PARSE', { hasBase64: !!base64, hasRaw: !!raw, bodyKeys: Object.keys(data) });
       let finalText = '';
-      if (base64 && typeof base64 === 'string') {
-        finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
-      }
-      if (!finalText && raw && typeof raw === 'string') {
+      if (TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
         finalText = safeDecodeTranslated(raw);
       }
+      if (!finalText && base64 && typeof base64 === 'string') {
+        finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
+      }
+      if (!finalText && !TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
+        finalText = safeDecodeTranslated(raw);
+      }
+      DEBUG_LOG('WEB_FINAL', { finalLen: finalText?.length ?? 0 });
       if (finalText) return { text: finalText };
       return { text };
     } catch (e) {
@@ -514,17 +553,24 @@ async function translateViaEdgeFunction(
       const { data, error } = await supabase.functions.invoke('translate', {
         body: { text: sanitized, targetLang, sourceLang },
       });
+      // #region agent log
+      DEBUG_LOG('INVOKE_RESULT', { platform: Platform.OS, hasError: !!error, errorMsg: error?.message, hasData: !!data, dataKeys: data ? Object.keys(data) : [] });
+      // #endregion
+      if (__DEV__) console.dir({ invokeResult: { data, error } }, { depth: 4 });
       if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
       if (!error) {
+        const TRANSLATE_RAW_FIRST = true;
         const base64 = data?.translatedTextBase64 as string | undefined;
         const raw = (data?.translatedText ?? data?.text) as string | undefined;
         let finalText = '';
-        if (base64 && typeof base64 === 'string') finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
-        if (!finalText && raw && typeof raw === 'string') finalText = safeDecodeTranslated(raw);
+        if (TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') finalText = safeDecodeTranslated(raw);
+        if (!finalText && base64 && typeof base64 === 'string') finalText = safeDecodeTranslated(decodeBase64ToUtf8(base64));
+        if (!finalText && !TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') finalText = safeDecodeTranslated(raw);
         if (finalText) return { text: finalText };
       }
     } catch (e) {
       if (TRANSLATE_DEBUG) console.warn('[translate] invoke exception:', e);
+      DEBUG_LOG('INVOKE_EXCEPTION', { err: String(e) });
     }
   }
 
