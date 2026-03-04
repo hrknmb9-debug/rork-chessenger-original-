@@ -246,14 +246,23 @@ function MessageBubble({
   onImagePress?: (url: string) => void;
   reactions: string[];
 }) {
-  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
+  const [translationState, setTranslationState] = useState<{ localTranslatedContent: string | null; loading: boolean; renderKey?: number; displayReady: boolean }>({ localTranslatedContent: null, loading: false, displayReady: true });
   const { isImage, value } = decodeMessageContent(item.text);
   const originalText = decodeForDisplay(item.text ?? '');
-  const displayText = decodeForDisplay(translationState.data ?? originalText);
+  const isManualTranslationActive = translationState.loading || (translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== originalText.trim());
+  const finalDisplaySource = translationState.localTranslatedContent ?? originalText;
+  const displayText = decodeForDisplay(finalDisplaySource);
 
   useEffect(() => {
-    setTranslationState({ data: null, loading: false });
-  }, [item.text, item.id, language]);
+    if (__DEV__ && Platform.OS === 'ios' && translationState.localTranslatedContent != null && translationState.displayReady) {
+      console.log('[translate:ios] DISPLAYING TEXT:', finalDisplaySource?.slice(0, 80));
+    }
+  }, [translationState.localTranslatedContent, translationState.displayReady, finalDisplaySource]);
+
+  useEffect(() => {
+    if (isManualTranslationActive) return;
+    setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+  }, [item.text, item.id, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -262,9 +271,13 @@ function MessageBubble({
       const text = decodeForDisplay(e.text);
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
+        setTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
-          setTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
-          if (__DEV__) console.log('[translate:msg] Event received, applied');
+          setTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
+          if (__DEV__) {
+            console.log('[translate:msg] Event received, applied');
+            console.log('[translate:ios] DISPLAYING TEXT:', text?.slice(0, 60) ?? '(empty)');
+          }
         }, 0);
       });
     });
@@ -276,8 +289,8 @@ function MessageBubble({
 
   const handleTranslate = useCallback(async () => {
     if (translationState.loading || !hasTranslatableText) return;
-    if (translationState.data) {
-      setTranslationState({ data: null, loading: false });
+    if (translationState.localTranslatedContent) {
+      setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
       return;
     }
     setTranslationState(prev => ({ ...prev, loading: true }));
@@ -289,7 +302,8 @@ function MessageBubble({
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
           if (Platform.OS !== 'ios') {
-            setTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
+            setTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+            if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (msg):', decoded.slice(0, 60));
             didSetResult = true;
           }
         }
@@ -298,9 +312,9 @@ function MessageBubble({
         Alert.alert(t('error', language), t('translation_failed', language));
       }
     } finally {
-      if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false }));
+      if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
     }
-  }, [hasTranslatableText, item.text, language, translationState.data, translationState.loading]);
+  }, [hasTranslatableText, item.text, language, translationState.localTranslatedContent, translationState.loading]);
 
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
@@ -368,10 +382,12 @@ function MessageBubble({
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
             <View key={translationState.renderKey ?? `msg-${item.id}`}>
-              <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
-                {displayText}
-              </Text>
-              {translationState.data != null && translationState.data.trim() !== (item.text ?? '').trim() && (
+              {Platform.OS === 'ios' && translationState.localTranslatedContent != null && !translationState.displayReady ? null : (
+                <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+                  {displayText}
+                </Text>
+              )}
+              {translationState.displayReady && translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (item.text ?? '').trim() && (
                 <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther, { fontSize: 10, opacity: 0.8, marginTop: 2 }]}>
                   {t('translated_by_ai', language)}
                 </Text>
@@ -389,7 +405,7 @@ function MessageBubble({
               <Languages size={12} color={colors.textMuted} />
             )}
             <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>
-              {translationState.loading ? t('translating', language) : translationState.data ? t('original', language) : t('translate', language)}
+              {translationState.loading ? t('translating', language) : translationState.localTranslatedContent ? t('original', language) : t('translate', language)}
             </Text>
           </Pressable>
         )}

@@ -68,14 +68,23 @@ function CommentItem({
   language: string;
   colors: ThemeColors;
 }) {
-  const [translationState, setTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
+  const [translationState, setTranslationState] = useState<{ localTranslatedContent: string | null; loading: boolean; renderKey?: number; displayReady: boolean }>({ localTranslatedContent: null, loading: false, displayReady: true });
   const commentText = language === 'en' && comment.contentEn ? comment.contentEn : comment.content;
   const originalText = decodeForDisplay(commentText ?? '');
-  const displayText = decodeForDisplay(translationState.data ?? originalText);
+  const isManualTranslationActive = translationState.loading || (translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== originalText.trim());
+  const finalDisplaySource = translationState.localTranslatedContent ?? originalText;
+  const displayText = decodeForDisplay(finalDisplaySource);
 
   useEffect(() => {
-    setTranslationState({ data: null, loading: false });
-  }, [comment.id, commentText, language]);
+    if (__DEV__ && Platform.OS === 'ios' && translationState.localTranslatedContent != null && translationState.displayReady) {
+      console.log('[translate:ios] DISPLAYING TEXT (comment):', finalDisplaySource?.slice(0, 80));
+    }
+  }, [translationState.localTranslatedContent, translationState.displayReady, finalDisplaySource]);
+
+  useEffect(() => {
+    if (isManualTranslationActive) return;
+    setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+  }, [comment.id, commentText, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -84,8 +93,9 @@ function CommentItem({
       const text = decodeForDisplay(e.text);
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
+        setTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
-          setTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
+          setTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
         }, 0);
       });
     });
@@ -94,8 +104,8 @@ function CommentItem({
 
   const onTranslate = useCallback(async () => {
     if (translationState.loading || !commentText?.trim()) return;
-    if (translationState.data) {
-      setTranslationState({ data: null, loading: false });
+    if (translationState.localTranslatedContent) {
+      setTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
       return;
     }
     setTranslationState(prev => ({ ...prev, loading: true }));
@@ -106,16 +116,17 @@ function CommentItem({
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
-          setTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
+          setTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+          if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (comment):', decoded.slice(0, 60));
           didSetResult = true;
         }
       } else if ('error' in result) {
         Alert.alert(t('error', language), t('translation_failed', language));
       }
     } finally {
-      if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false }));
+      if (!didSetResult) setTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
     }
-  }, [commentText, language, translationState.data, translationState.loading]);
+  }, [commentText, language, translationState.localTranslatedContent, translationState.loading]);
 
   return (
     <View>
@@ -124,8 +135,10 @@ function CommentItem({
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
           <View key={translationState.renderKey ?? `comment-${comment.id}`}>
-            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
-            {translationState.data != null && translationState.data.trim() !== (commentText ?? '').trim() && (
+            {Platform.OS === 'ios' && translationState.localTranslatedContent != null && !translationState.displayReady ? null : (
+              <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
+            )}
+            {translationState.displayReady && translationState.localTranslatedContent != null && translationState.localTranslatedContent.trim() !== (commentText ?? '').trim() && (
               <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
             )}
           </View>
@@ -136,7 +149,7 @@ function CommentItem({
             <Pressable onPress={onTranslate} disabled={translationState.loading} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               {translationState.loading ? <ActivityIndicator size="small" color={colors.textMuted} style={{ transform: [{ scale: 0.7 }] }} /> : null}
               <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>
-                {translationState.loading ? t('translating', language) : translationState.data ? t('original', language) : t('translate', language)}
+                {translationState.loading ? t('translating', language) : translationState.localTranslatedContent ? t('original', language) : t('translate', language)}
               </Text>
             </Pressable>
           </View>
@@ -184,7 +197,7 @@ function PostCard({
   const [showComments, setShowComments] = useState<boolean>(false);
   const [commentText, setCommentText] = useState<string>('');
   const [replyToId, setReplyToId] = useState<string | null>(null);
-  const [contentTranslationState, setContentTranslationState] = useState<{ data: string | null; loading: boolean; renderKey?: number }>({ data: null, loading: false });
+  const [contentTranslationState, setContentTranslationState] = useState<{ localTranslatedContent: string | null; loading: boolean; renderKey?: number; displayReady: boolean }>({ localTranslatedContent: null, loading: false, displayReady: true });
   const [translatedEventTitle, setTranslatedEventTitle] = useState<string | null>(null);
   const [translatedEventLocation, setTranslatedEventLocation] = useState<string | null>(null);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -215,11 +228,21 @@ function PostCard({
   }, [post.comments]);
 
   const contentText = language === 'en' && post.contentEn ? post.contentEn : post.content;
-  const displayContent = decodeForDisplay(contentTranslationState.data ?? contentText);
+  const originalContentText = decodeForDisplay(contentText ?? '');
+  const isManualTranslationActive = contentTranslationState.loading || (contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== originalContentText.trim());
+  const finalDisplaySource = contentTranslationState.localTranslatedContent ?? originalContentText;
+  const displayContent = decodeForDisplay(finalDisplaySource);
 
   useEffect(() => {
-    setContentTranslationState({ data: null, loading: false });
-  }, [post.id, contentText, language]);
+    if (__DEV__ && Platform.OS === 'ios' && contentTranslationState.localTranslatedContent != null && contentTranslationState.displayReady) {
+      console.log('[translate:ios] DISPLAYING TEXT (post):', finalDisplaySource?.slice(0, 80));
+    }
+  }, [contentTranslationState.localTranslatedContent, contentTranslationState.displayReady, finalDisplaySource]);
+
+  useEffect(() => {
+    if (isManualTranslationActive) return;
+    setContentTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
+  }, [post.id, contentText, language, isManualTranslationActive]);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -229,8 +252,9 @@ function PostCard({
       const text = decodeForDisplay(e.text);
       if (__DEV__ && !text?.trim()) console.error('[translate:ios] ERROR: Result is empty or undefined');
       InteractionManager.runAfterInteractions(() => {
+        setContentTranslationState({ localTranslatedContent: text || null, loading: false, displayReady: false });
         setTimeout(() => {
-          setContentTranslationState({ data: text || null, loading: false, renderKey: Date.now() });
+          setContentTranslationState({ localTranslatedContent: text || null, loading: false, renderKey: Date.now(), displayReady: true });
         }, 0);
       });
     });
@@ -239,8 +263,8 @@ function PostCard({
 
   const handleTranslate = useCallback(async () => {
     if (contentTranslationState.loading || !contentText?.trim()) return;
-    if (contentTranslationState.data) {
-      setContentTranslationState({ data: null, loading: false });
+    if (contentTranslationState.localTranslatedContent) {
+      setContentTranslationState({ localTranslatedContent: null, loading: false, displayReady: true });
       return;
     }
     setContentTranslationState(prev => ({ ...prev, loading: true }));
@@ -252,16 +276,17 @@ function PostCard({
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim() && Platform.OS !== 'ios') {
-          setContentTranslationState({ data: decoded, loading: false, renderKey: Date.now() });
+          setContentTranslationState({ localTranslatedContent: decoded, loading: false, renderKey: Date.now(), displayReady: true });
+          if (__DEV__) console.log('[translate:ios] DISPLAYING TEXT (post):', decoded.slice(0, 60));
           didSetResult = true;
         }
       } else if ('error' in result) {
         Alert.alert(t('error', language), t('translation_failed', language));
       }
     } finally {
-      if (!didSetResult) setContentTranslationState(prev => ({ ...prev, loading: false }));
+      if (!didSetResult) setContentTranslationState(prev => ({ ...prev, loading: false, displayReady: true }));
     }
-  }, [contentText, language, contentTranslationState.data, contentTranslationState.loading]);
+  }, [contentText, language, post.id, contentTranslationState.localTranslatedContent, contentTranslationState.loading]);
 
   const targetLang = getTargetLanguage(language);
   useEffect(() => {
@@ -465,10 +490,12 @@ function PostCard({
 
       <View style={{ marginBottom: 12 }}>
         <View key={contentTranslationState.renderKey ?? `post-${post.id}`}>
-          <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
-            {displayContent}
-          </Text>
-          {contentTranslationState.data != null && contentTranslationState.data.trim() !== (contentText ?? '').trim() && (
+          {Platform.OS === 'ios' && contentTranslationState.localTranslatedContent != null && !contentTranslationState.displayReady ? null : (
+            <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
+              {displayContent}
+            </Text>
+          )}
+          {contentTranslationState.displayReady && contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== (contentText ?? '').trim() && (
             <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
           )}
         </View>
@@ -480,10 +507,10 @@ function PostCard({
           {contentTranslationState.loading ? (
             <ActivityIndicator size="small" color={colors.gold} />
           ) : (
-            <Languages size={14} color={contentTranslationState.data ? colors.gold : colors.textMuted} />
+            <Languages size={14} color={contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted} />
           )}
-          <Text style={{ fontSize: 12, fontWeight: '600' as const, color: contentTranslationState.data ? colors.gold : colors.textMuted }}>
-            {contentTranslationState.loading ? t('translating', language) : contentTranslationState.data ? t('original', language) : t('translate', language)}
+          <Text style={{ fontSize: 12, fontWeight: '600' as const, color: contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted }}>
+            {contentTranslationState.loading ? t('translating', language) : contentTranslationState.localTranslatedContent ? t('original', language) : t('translate', language)}
           </Text>
         </Pressable>
       </View>
