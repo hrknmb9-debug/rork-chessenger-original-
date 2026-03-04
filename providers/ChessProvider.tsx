@@ -130,7 +130,7 @@ async function fillMissingEventDetails(
       participants,
       createdAt: (evRow.created_at as string) ?? post?.createdAt ?? '',
       deadlineAt,
-      isClosed: !!(evRow.closed_at as string | null),
+      isClosed: !!(evRow.closed_at as string | null | undefined) || !!(deadlineAt && new Date(deadlineAt) <= new Date()),
     };
     result = result.map(p => p.id === postId ? { ...p, type: 'event' as const, event: timelineEvent } : p);
   }
@@ -476,7 +476,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           participants,
           createdAt: (rawEvent.created_at as string) ?? post.created_at,
           deadlineAt,
-          isClosed: !!(rawEvent.closed_at as string | null),
+          isClosed: !!(rawEvent.closed_at as string | null | undefined) || !!(deadlineAt && new Date(deadlineAt) <= new Date()),
         };
       }
 
@@ -1968,7 +1968,6 @@ export const [ChessProvider, useChess] = createContextHook(() => {
               max_participants: event.maxParticipants,
               created_at: event.createdAt,
               deadline_at: event.deadlineAt != null && String(event.deadlineAt).trim() !== '' ? event.deadlineAt : null,
-              closed_at: null,
             })
             .select()
             .single();
