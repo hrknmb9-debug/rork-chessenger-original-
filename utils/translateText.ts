@@ -2,7 +2,7 @@
  * テキスト翻訳ユーティリティ
  * Supabase Edge Function または MyMemory 無料API を使用
  * 翻訳結果は AsyncStorage にキャッシュし API クォータを節約
- * iOS環境での fetch/UTF-8 問題に対応（XMLHttpRequest + arraybuffer 使用）
+ * iOS: res.text() を使用（arrayBuffer が動作しない環境対策）
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -128,7 +128,7 @@ async function setCache(text: string, target: string, source: string, translated
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-/** ArrayBuffer を UTF-8 文字列にデコード（TextDecoder が無い環境のフォールバック） */
+/** ArrayBuffer を UTF-8 文字列にデコード */
 function decodeUtf8FromBuffer(buf: ArrayBuffer): string {
   if (typeof TextDecoder !== 'undefined') {
     return new TextDecoder('utf-8').decode(buf);
@@ -137,111 +137,45 @@ function decodeUtf8FromBuffer(buf: ArrayBuffer): string {
   let s = '';
   let i = 0;
   while (i < bytes.length) {
-    const b = bytes[i];
-    if (b < 128) {
-      s += String.fromCharCode(b);
-      i++;
-    } else if ((b & 0xe0) === 0xc0 && i + 1 < bytes.length) {
-      s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1]! & 0x3f));
-      i += 2;
+    const b = bytes[i]!;
+    if (b < 128) { s += String.fromCharCode(b); i++; }
+    else if ((b & 0xe0) === 0xc0 && i + 1 < bytes.length) {
+      s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1]! & 0x3f)); i += 2;
     } else if ((b & 0xf0) === 0xe0 && i + 2 < bytes.length) {
-      s += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i + 1]! & 0x3f) << 6) | (bytes[i + 2]! & 0x3f));
-      i += 3;
+      s += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i + 1]! & 0x3f) << 6) | (bytes[i + 2]! & 0x3f)); i += 3;
     } else if ((b & 0xf8) === 0xf0 && i + 3 < bytes.length) {
-      s += String.fromCodePoint(((b & 0x07) << 18) | ((bytes[i + 1]! & 0x3f) << 12) | ((bytes[i + 2]! & 0x3f) << 6) | (bytes[i + 3]! & 0x3f));
-      i += 4;
-    } else {
-      s += String.fromCharCode(b);
-      i++;
-    }
+      s += String.fromCodePoint(((b & 0x07) << 18) | ((bytes[i + 1]! & 0x3f) << 12) | ((bytes[i + 2]! & 0x3f) << 6) | (bytes[i + 3]! & 0x3f)); i += 4;
+    } else { s += String.fromCharCode(b); i++; }
   }
   return s;
 }
 
 /**
- * XMLHttpRequest で arraybuffer 取得 → UTF-8 デコード → JSON パース
- * RN iOS: fetch の arrayBuffer() が UTF-8 マルチバイトで不具合があるため XHR を優先
- */
-function xhrPostJson(
-  url: string,
-  body: Record<string, unknown>,
-  headers: Record<string, string>
-): Promise<{ ok: boolean; status: number; data: Record<string, unknown> | null }> {
-  return new Promise((resolve) => {
-    const req = new XMLHttpRequest();
-    req.open('POST', url, true);
-    req.responseType = 'arraybuffer';
-    req.setRequestHeader('Content-Type', 'application/json');
-    Object.entries(headers).forEach(([k, v]) => req.setRequestHeader(k, v));
-    req.onload = () => {
-      try {
-        const buf = req.response as ArrayBuffer | null;
-        if (!buf || buf.byteLength === 0) {
-          resolve({ ok: req.status >= 200 && req.status < 300, status: req.status, data: null });
-          return;
-        }
-        const rawText = decodeUtf8FromBuffer(buf);
-        if (!rawText?.trim()) {
-          resolve({ ok: req.status >= 200 && req.status < 300, status: req.status, data: null });
-          return;
-        }
-        const data = JSON.parse(rawText) as Record<string, unknown>;
-        resolve({ ok: req.status >= 200 && req.status < 300, status: req.status, data });
-      } catch {
-        resolve({ ok: false, status: req.status, data: null });
-      }
-    };
-    req.onerror = () => resolve({ ok: false, status: 0, data: null });
-    req.send(JSON.stringify(body));
-  });
-}
-
-/**
- * XMLHttpRequest で GET → arraybuffer 取得 → UTF-8 デコード → JSON パース
- */
-function xhrGetJson(url: string): Promise<{ ok: boolean; data: Record<string, unknown> | null }> {
-  return new Promise((resolve) => {
-    const req = new XMLHttpRequest();
-    req.open('GET', url, true);
-    req.responseType = 'arraybuffer';
-    req.onload = () => {
-      try {
-        const buf = req.response as ArrayBuffer | null;
-        if (!buf || buf.byteLength === 0) {
-          resolve({ ok: req.status >= 200 && req.status < 300, data: null });
-          return;
-        }
-        const rawText = decodeUtf8FromBuffer(buf);
-        if (!rawText?.trim()) {
-          resolve({ ok: req.status >= 200 && req.status < 300, data: null });
-          return;
-        }
-        const data = JSON.parse(rawText) as Record<string, unknown>;
-        resolve({ ok: req.status >= 200 && req.status < 300, data });
-      } catch {
-        resolve({ ok: false, data: null });
-      }
-    };
-    req.onerror = () => resolve({ ok: false, data: null });
-    req.send();
-  });
-}
-
-/**
- * fetch レスポンスを UTF-8 でパース（Web/Android 用、arrayBuffer + TextDecoder）
- * iOS では xhrPostJson / xhrGetJson を直接使うため呼ばれない
+ * fetch レスポンスを JSON にパース
+ * iOS: res.text() を優先（arrayBuffer が RN で未対応 or 破損する環境があるため）
+ * 他: arrayBuffer + TextDecoder で UTF-8 を確実に処理
  */
 async function parseJsonFromResponse(res: Response): Promise<Record<string, unknown> | null> {
-  try {
-    const buf = await res.arrayBuffer();
-    const rawText = decodeUtf8FromBuffer(buf);
-    if (TRANSLATE_DEBUG) console.log('[translate] response status:', res.status, 'body length:', rawText?.length);
-    if (!rawText?.trim()) return null;
-    return JSON.parse(rawText) as Record<string, unknown>;
-  } catch (e) {
-    if (TRANSLATE_DEBUG) console.warn('[translate] JSON parse failed:', e);
-    return null;
+  const useText = Platform.OS === 'ios';
+  if (useText) {
+    try {
+      const rawText = await res.text();
+      if (rawText?.trim()) return JSON.parse(rawText) as Record<string, unknown>;
+    } catch (e) {
+      if (TRANSLATE_DEBUG) console.warn('[translate] res.text() failed:', e);
+    }
+  } else {
+    try {
+      const buf = await res.arrayBuffer();
+      if (buf && buf.byteLength > 0) {
+        const rawText = decodeUtf8FromBuffer(buf);
+        if (rawText?.trim()) return JSON.parse(rawText) as Record<string, unknown>;
+      }
+    } catch (e) {
+      if (TRANSLATE_DEBUG) console.warn('[translate] arrayBuffer failed:', e);
+    }
   }
+  return null;
 }
 
 /**
@@ -270,21 +204,6 @@ async function translateViaEdgeFunction(
         Authorization: `Bearer ${token}`,
       };
       if (TRANSLATE_DEBUG) console.log('[translate] POST', url, 'target:', targetLang, 'len:', text.length);
-      if (Platform.OS === 'ios') {
-        const { ok, status, data } = await xhrPostJson(url, body, headers);
-        if (!ok || !data) {
-          if (TRANSLATE_DEBUG) console.warn('[translate] XHR failed or empty', status);
-          return null;
-        }
-        const err = data.error as string | undefined;
-        if (err) {
-          if (TRANSLATE_DEBUG) console.warn('[translate] API error:', err);
-          return null;
-        }
-        const raw = (data.translatedText ?? data.text) as string | undefined;
-        if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-        return null;
-      }
       const res = await fetch(url, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -342,13 +261,6 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
     const langpair = `${sourceLang}|${targetLang}`;
     const encoded = encodeURIComponent(text.slice(0, 500));
     const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=${langpair}`;
-    if (Platform.OS === 'ios') {
-      const { ok, data } = await xhrGetJson(url);
-      if (!ok || !data) return null;
-      const raw = data?.responseData?.translatedText as string | undefined;
-      if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-      return null;
-    }
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await parseJsonFromResponse(res);

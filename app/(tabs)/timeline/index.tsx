@@ -94,7 +94,7 @@ function CommentItem({
         <SafeImage uri={comment.author.avatar} name={comment.author.name} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surfaceLight }} contentFit="cover" />
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
-          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText ?? ''}</Text>
           {translated && (
             <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
           )}
@@ -404,7 +404,7 @@ function PostCard({
 
       <View style={{ marginBottom: 12 }}>
         <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
-          {isTranslating ? contentText : displayContent}
+          {(isTranslating ? contentText : displayContent) ?? ''}
         </Text>
         {isShowingTranslated && (
           <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>

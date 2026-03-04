@@ -269,12 +269,13 @@ function MessageBubble({
       const { data: { session } } = await supabase.auth.getSession();
       const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
       if ('text' in result) setTranslatedText(decodeForDisplay(result.text));
+      else if ('error' in result && __DEV__) console.warn('[translate]', result.error);
     } finally {
       setIsTranslating(false);
     }
   }, [hasTranslatableText, item.text, language, translatedText, isTranslating]);
 
-  const displayText = translatedText != null ? decodeForDisplay(translatedText) : item.text;
+  const displayText = (translatedText != null ? decodeForDisplay(translatedText) : item.text) ?? '';
 
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
