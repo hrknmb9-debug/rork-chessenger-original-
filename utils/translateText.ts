@@ -2,7 +2,7 @@
  * テキスト翻訳ユーティリティ
  * Supabase Edge Function または MyMemory 無料API を使用
  * 翻訳結果は AsyncStorage にキャッシュし API クォータを節約
- * iOS: res.text() を使用（arrayBuffer が動作しない環境対策）
+ * 全プラットフォーム: arrayBuffer + TextDecoder（iOS の res.text はキリル破損するため不使用）
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -152,28 +152,18 @@ function decodeUtf8FromBuffer(buf: ArrayBuffer): string {
 
 /**
  * fetch レスポンスを JSON にパース
- * iOS: res.text() を優先（arrayBuffer が RN で未対応 or 破損する環境があるため）
- * 他: arrayBuffer + TextDecoder で UTF-8 を確実に処理
+ * 全プラットフォーム: arrayBuffer + TextDecoder で UTF-8 を確実に処理
+ * （iOS の res.text() はキリル・日本語等のマルチバイトで破損するため使用しない）
  */
 async function parseJsonFromResponse(res: Response): Promise<Record<string, unknown> | null> {
-  const useText = Platform.OS === 'ios';
-  if (useText) {
-    try {
-      const rawText = await res.text();
+  try {
+    const buf = await res.arrayBuffer();
+    if (buf && buf.byteLength > 0) {
+      const rawText = decodeUtf8FromBuffer(buf);
       if (rawText?.trim()) return JSON.parse(rawText) as Record<string, unknown>;
-    } catch (e) {
-      if (TRANSLATE_DEBUG) console.warn('[translate] res.text() failed:', e);
     }
-  } else {
-    try {
-      const buf = await res.arrayBuffer();
-      if (buf && buf.byteLength > 0) {
-        const rawText = decodeUtf8FromBuffer(buf);
-        if (rawText?.trim()) return JSON.parse(rawText) as Record<string, unknown>;
-      }
-    } catch (e) {
-      if (TRANSLATE_DEBUG) console.warn('[translate] arrayBuffer failed:', e);
-    }
+  } catch (e) {
+    if (TRANSLATE_DEBUG) console.warn('[translate] parseJsonFromResponse failed:', e);
   }
   return null;
 }
@@ -298,7 +288,9 @@ export async function translateText(
   const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
   if (viaEdge && 'text' in viaEdge) {
     const decoded = safeDecodeTranslated(viaEdge.text);
-    setCache(text, normalizedTarget, sourceLang, decoded);
+    if (decoded.trim() && decoded.trim() !== text.trim()) {
+      setCache(text, normalizedTarget, sourceLang, decoded);
+    }
     return { text: decoded };
   }
 
@@ -306,7 +298,9 @@ export async function translateText(
   const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
   if (viaMyMemory && 'text' in viaMyMemory) {
     const decoded = safeDecodeTranslated(viaMyMemory.text);
-    setCache(text, normalizedTarget, sourceLang, decoded);
+    if (decoded.trim() && decoded.trim() !== text.trim()) {
+      setCache(text, normalizedTarget, sourceLang, decoded);
+    }
     return { text: decoded };
   }
 

@@ -82,7 +82,10 @@ function CommentItem({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const result = await translateText(commentText, getTargetLanguage(language), session?.access_token);
-      if ('text' in result) setTranslated(decodeForDisplay(result.text));
+      if ('text' in result) {
+        const decoded = decodeForDisplay(result.text);
+        if (decoded.trim() && decoded.trim() !== commentText?.trim()) setTranslated(decoded);
+      }
     } finally {
       setTranslating(false);
     }
@@ -200,7 +203,10 @@ function PostCard({
       const { data: { session } } = await supabase.auth.getSession();
       const targetLang = getTargetLanguage(language);
       const result = await translateText(contentText, targetLang, session?.access_token);
-      if ('text' in result) setTranslatedContent(decodeForDisplay(result.text));
+      if ('text' in result) {
+        const decoded = decodeForDisplay(result.text);
+        if (decoded.trim() && decoded.trim() !== contentText?.trim()) setTranslatedContent(decoded);
+      }
     } catch {
       // ignore
     } finally {

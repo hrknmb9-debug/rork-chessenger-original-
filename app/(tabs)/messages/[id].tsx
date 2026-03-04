@@ -268,8 +268,10 @@ function MessageBubble({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
-      if ('text' in result) setTranslatedText(decodeForDisplay(result.text));
-      else if ('error' in result && __DEV__) console.warn('[translate]', result.error);
+      if ('text' in result) {
+        const decoded = decodeForDisplay(result.text);
+        if (decoded.trim() && decoded.trim() !== item.text?.trim()) setTranslatedText(decoded);
+      } else if ('error' in result && __DEV__) console.warn('[translate]', result.error);
     } finally {
       setIsTranslating(false);
     }
