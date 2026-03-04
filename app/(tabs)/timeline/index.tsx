@@ -48,7 +48,7 @@ import { TimelinePost, TimelineComment, TimelineEvent } from '@/types';
 import { t, getTimeAgo, isRTL } from '@/utils/translations';
 import { uploadTimelineImage } from '@/utils/messageImageUpload';
 import { supabase } from '@/utils/supabaseClient';
-import { translateText, getTargetLanguage, decodeForDisplay } from '@/utils/translateText';
+import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
 
 const TEMPLATES = [
   { key: 'beginner', labelKey: 'template_beginner' },
@@ -79,6 +79,20 @@ function CommentItem({
     setRenderKey(0);
   }, [comment.id, commentText, language]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const sub = onTranslationComplete((e) => {
+      if (e.itemId !== comment.id) return;
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(() => {
+          setTranslated(decodeForDisplay(e.text));
+          setRenderKey(k => k + 1);
+        }, 0);
+      });
+    });
+    return () => sub.remove();
+  }, [comment.id]);
+
   const onTranslate = useCallback(async () => {
     if (translating || !commentText?.trim()) return;
     if (translated) {
@@ -88,19 +102,13 @@ function CommentItem({
     setTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const result = await translateText(commentText, getTargetLanguage(language), session?.access_token);
+      const result = await translateText(commentText, getTargetLanguage(language), session?.access_token, { itemId: comment.id });
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
-          const doSet = () => {
+          if (Platform.OS !== 'ios') {
             setTranslated(decoded);
-            setRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:comment] State updated', comment.id, 'len=', decoded.length);
-          };
-          if (Platform.OS === 'ios') {
-            InteractionManager.runAfterInteractions(doSet);
-          } else {
-            doSet();
+            setRenderKey(prev => prev + 1);
           }
         }
       } else if ('error' in result) {
@@ -217,6 +225,21 @@ function PostCard({
     setPostRenderKey(0);
   }, [post.id, contentText, language]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const itemId = `post-content-${post.id}`;
+    const sub = onTranslationComplete((e) => {
+      if (e.itemId !== itemId) return;
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(() => {
+          setTranslatedContent(decodeForDisplay(e.text));
+          setPostRenderKey(k => k + 1);
+        }, 0);
+      });
+    });
+    return () => sub.remove();
+  }, [post.id]);
+
   const handleTranslate = useCallback(async () => {
     if (isTranslating || !contentText?.trim()) return;
     if (isShowingTranslated) {
@@ -227,19 +250,13 @@ function PostCard({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const targetLang = getTargetLanguage(language);
-      const result = await translateText(contentText, targetLang, session?.access_token);
+      const result = await translateText(contentText, targetLang, session?.access_token, { itemId: `post-content-${post.id}` });
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
-          const doSet = () => {
+          if (Platform.OS !== 'ios') {
             setTranslatedContent(decoded);
-            setPostRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:post] State updated', post.id, 'len=', decoded.length);
-          };
-          if (Platform.OS === 'ios') {
-            InteractionManager.runAfterInteractions(doSet);
-          } else {
-            doSet();
+            setPostRenderKey(prev => prev + 1);
           }
         }
       } else if ('error' in result) {
@@ -266,10 +283,10 @@ function PostCard({
       const doSet = (setter: (v: string) => void, val: string, label: string) => {
         const fn = () => {
           setter(val);
-          setPostRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
+          setPostRenderKey(prev => prev + 1);
           if (__DEV__ && Platform.OS === 'ios') console.log('[translate:event] State updated', label, 'len=', val.length);
         };
-        if (Platform.OS === 'ios') InteractionManager.runAfterInteractions(fn);
+        if (Platform.OS === 'ios') InteractionManager.runAfterInteractions(() => setTimeout(fn, 0));
         else fn();
       };
       if (post.event?.title?.trim()) {

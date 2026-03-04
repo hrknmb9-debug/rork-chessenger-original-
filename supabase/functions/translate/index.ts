@@ -58,7 +58,10 @@ serve(async (req) => {
   }
 
   try {
-    const { text, targetLang, sourceLang } = await req.json();
+    const body = await req.json();
+    const text = body?.text;
+    const targetLang = body?.targetLang;
+    const sourceLang = body?.sourceLang;
     if (!text || typeof text !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Missing text' }),
@@ -99,9 +102,14 @@ serve(async (req) => {
         /* デコード失敗時は元の文字列を使用 */
       }
     }
-    // UTF-8 で JSON シリアライズ（絵文字・サロゲートペアを含む）
-    const body = JSON.stringify({ translatedText: output });
-    return new Response(body, {
+    // Base64バイパス: iOSネットワーク層の文字コード改変を完全回避
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(output);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const translatedTextBase64 = btoa(binary);
+    const responseBody = JSON.stringify({ translatedTextBase64, translatedText: output });
+    return new Response(responseBody, {
       headers: { ...corsHeaders },
       status: 200,
     });

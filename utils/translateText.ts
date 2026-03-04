@@ -41,6 +41,41 @@ const CACHE_VERSION = 7;
 const TRANSLATE_DEBUG = __DEV__;
 
 export type TranslateResult = { text: string } | { error: string };
+export type TranslateOptions = { itemId?: string };
+
+/** 見えない文字の徹底排除: 制御文字・ゼロ幅スペース等を除去（iOS fetch クラッシュ防止） */
+function sanitizePayload(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // 制御文字（\t\n\r 除く）
+    .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')       // ゼロ幅スペース・ノンディレクティブ・BOM
+    .replace(/[\u2028\u2029]/g, ' ')                   // 行区切り文字はスペースに
+    .trim();
+}
+
+/** Base64 を UTF-8 文字列にデコード */
+function decodeBase64ToUtf8(base64: string): string {
+  try {
+    const binary = globalThis.atob?.(base64) ?? (typeof atob !== 'undefined' ? atob(base64) : '');
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Base64 decode failed:', e);
+    return '';
+  }
+}
+
+/** グローバルイベント: 翻訳完了のプル型通知 */
+type TranslationCompletePayload = { itemId: string; text: string };
+const translationListeners: Array<(p: TranslationCompletePayload) => void> = [];
+export function onTranslationComplete(cb: (p: TranslationCompletePayload) => void): { remove: () => void } {
+  translationListeners.push(cb);
+  return { remove: () => { const i = translationListeners.indexOf(cb); if (i >= 0) translationListeners.splice(i, 1); } };
+}
+function emitTranslationComplete(payload: TranslationCompletePayload): void {
+  translationListeners.forEach(l => { try { l(payload); } catch { /* ignore */ } });
+}
 
 /** URLエンコード・不正エンコーディングの翻訳結果をデコード（iOS文字化け対策） */
 function safeDecodeTranslated(text: string): string {
@@ -303,6 +338,7 @@ async function translateViaEdgeFunction(
   sourceLang: string,
   accessToken?: string | null
 ): Promise<TranslateResult | null> {
+  const sanitized = sanitizePayload(text);
   const token = accessToken ?? SUPABASE_ANON_KEY;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     if (TRANSLATE_DEBUG) console.warn('[translate] Missing SUPABASE_URL or ANON_KEY');
@@ -311,7 +347,7 @@ async function translateViaEdgeFunction(
 
   const doFetch = async (): Promise<TranslateResult | null> => {
     const url = `${SUPABASE_URL}/functions/v1/translate?t=${Date.now()}`;
-    const bodyStr = JSON.stringify({ text, targetLang, sourceLang });
+    const bodyStr = JSON.stringify({ text: sanitized, targetLang, sourceLang });
     const headers: Record<string, string> = {
       'Accept': 'application/json; charset=utf-8',
       'Authorization': `Bearer ${token}`,
@@ -370,9 +406,16 @@ async function translateViaEdgeFunction(
         if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] API error:', err);
         return { text }; // フォールバック: 元テキスト
       }
+      // Base64バイパス: translatedTextBase64 優先でデコード
+      const base64 = data.translatedTextBase64 as string | undefined;
+      if (base64 && typeof base64 === 'string') {
+        const decoded = decodeBase64ToUtf8(base64);
+        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Decoded Base64:', decoded.slice(0, 60) + (decoded.length > 60 ? '...' : ''));
+        if (decoded) return { text: safeDecodeTranslated(decoded) };
+      }
       const raw = (data.translatedText ?? data.text) as string | undefined;
       if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] no translatedText field → fallback');
+      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] no translatedText/Base64 field → fallback');
       return { text };
     }
 
@@ -397,6 +440,11 @@ async function translateViaEdgeFunction(
         if (TRANSLATE_DEBUG) console.warn('[translate] API error:', err);
         return { text };
       }
+      const base64 = data.translatedTextBase64 as string | undefined;
+      if (base64 && typeof base64 === 'string') {
+        const decoded = decodeBase64ToUtf8(base64);
+        if (decoded) return { text: safeDecodeTranslated(decoded) };
+      }
       const raw = (data.translatedText ?? data.text) as string | undefined;
       if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
       return { text };
@@ -411,7 +459,7 @@ async function translateViaEdgeFunction(
   if (Platform.OS !== 'ios') {
     try {
       const { data, error } = await supabase.functions.invoke('translate', {
-        body: { text, targetLang, sourceLang },
+        body: { text: sanitized, targetLang, sourceLang },
       });
       if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
       if (!error) {
@@ -489,17 +537,19 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
 export async function translateText(
   text: string,
   targetLang: string,
-  accessToken?: string | null
+  accessToken?: string | null,
+  options?: TranslateOptions
 ): Promise<TranslateResult> {
+  const sanitized = sanitizePayload(text);
   const normalizedTarget = normalizeLang(targetLang);
-  const sourceLang = detectSourceLang(text);
-  if (!text?.trim()) return { error: 'Empty text' };
+  const sourceLang = detectSourceLang(sanitized);
+  if (!sanitized?.trim()) return { error: 'Empty text' };
   if (sourceLang === normalizedTarget) {
     if (TRANSLATE_DEBUG) console.log('[translate] Skip: source===target', normalizedTarget);
-    return { text };
+    return { text: sanitized };
   }
 
-  const cached = await getCached(text, normalizedTarget, sourceLang);
+  const cached = await getCached(sanitized, normalizedTarget, sourceLang);
   if (cached) return { text: safeDecodeTranslated(cached) };
 
   return withLimit(async () => {
@@ -507,23 +557,25 @@ export async function translateText(
       console.log('[translate:ios] ========== translateText START ==========');
       console.log('[translate:ios] target=', normalizedTarget, 'source=', sourceLang);
     }
-    const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
+    const viaEdge = await translateViaEdgeFunction(sanitized, normalizedTarget, sourceLang, accessToken);
     if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Edge result', viaEdge ? 'OK' : 'fallback/null');
     if (viaEdge && 'text' in viaEdge) {
       const decoded = safeDecodeTranslated(viaEdge.text);
-      if (decoded.trim() && decoded.trim() !== text.trim()) {
-        setCache(text, normalizedTarget, sourceLang, decoded);
+      if (decoded.trim() && decoded.trim() !== sanitized.trim()) {
+        setCache(sanitized, normalizedTarget, sourceLang, decoded);
       }
+      if (options?.itemId) emitTranslationComplete({ itemId: options.itemId, text: decoded });
       return { text: decoded };
     }
 
     if (TRANSLATE_DEBUG) console.log('[translate] Edge failed, trying MyMemory');
-    const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
+    const viaMyMemory = await translateViaMyMemory(sanitized, normalizedTarget, sourceLang);
     if (viaMyMemory && 'text' in viaMyMemory) {
       const decoded = safeDecodeTranslated(viaMyMemory.text);
-      if (decoded.trim() && decoded.trim() !== text.trim()) {
-        setCache(text, normalizedTarget, sourceLang, decoded);
+      if (decoded.trim() && decoded.trim() !== sanitized.trim()) {
+        setCache(sanitized, normalizedTarget, sourceLang, decoded);
       }
+      if (options?.itemId) emitTranslationComplete({ itemId: options.itemId, text: decoded });
       return { text: decoded };
     }
 

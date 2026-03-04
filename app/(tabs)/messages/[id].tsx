@@ -34,7 +34,7 @@ import {
   decodeMessageContent,
   isLoadableImageUrl,
 } from '@/utils/messageImageUpload';
-import { translateText, getTargetLanguage, decodeForDisplay } from '@/utils/translateText';
+import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -256,6 +256,22 @@ function MessageBubble({
     setTranslatedText(null);
     setRenderKey(0);
   }, [item.text, item.id, language]);
+
+  // グローバルイベント: iOS で翻訳完了をプル型受信（UIデッドロック回避）
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const sub = onTranslationComplete((e) => {
+      if (e.itemId !== item.id) return;
+      InteractionManager.runAfterInteractions(() => {
+        setTimeout(() => {
+          setTranslatedText(decodeForDisplay(e.text));
+          setRenderKey(k => k + 1);
+          if (__DEV__) console.log('[translate:msg] Event received, applied');
+        }, 0);
+      });
+    });
+    return () => sub.remove();
+  }, [item.id]);
   const imageUrl = isImage ? (value || (item.imageUrl ?? undefined)) : (item.imageUrl ?? undefined);
   const hasTranslatableText = !isImage && item.text?.trim().length > 0;
   const timeStr = getTimeAgo(item.timestamp, language);
@@ -269,19 +285,15 @@ function MessageBubble({
     setIsTranslating(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
+      const result = await translateText(item.text, getTargetLanguage(language), session?.access_token, { itemId: item.id });
       if ('text' in result) {
         const decoded = decodeForDisplay(result.text);
         if (decoded.trim()) {
-          const doSet = () => {
-            setTranslatedText(decoded);
-            setRenderKey(prev => prev + 1); // 可能性3: 全く新しい要素として強制再マウント
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:msg] State updated', item.id, 'len=', decoded.length);
-          };
           if (Platform.OS === 'ios') {
-            InteractionManager.runAfterInteractions(doSet);
+            // iOS: EventEmitter のプル型で更新（コールバックでは setState しない）
           } else {
-            doSet();
+            setTranslatedText(decoded);
+            setRenderKey(prev => prev + 1);
           }
         }
       } else if ('error' in result) {
