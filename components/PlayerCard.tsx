@@ -7,7 +7,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { ThemeColors } from '@/constants/colors';
 import { Player, PlayStyle } from '@/types';
 import { getSkillLabel, getSkillColor, getSkillBgColor, formatDistance, formatRating } from '@/utils/helpers';
-import { Language, t, getLanguageFlag, getCountryFlag, getCountryName } from '@/utils/translations';
+import { Language, t, getCountryFlag, getCountryName } from '@/utils/translations';
 import { SafeImage } from '@/components/SafeImage';
 
 interface PlayerCardProps {
@@ -279,15 +279,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       color: colors.blue,
       fontWeight: '600' as const,
-    },
-    langRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      marginLeft: 'auto',
-    },
-    langFlag: {
-      fontSize: 12,
     },
     playStylesRow: {
       flexDirection: 'row',

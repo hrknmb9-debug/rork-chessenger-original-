@@ -11,7 +11,7 @@ import { supabase } from '@/utils/supabaseClient';
 
 const TRANSLATE_CACHE_KEY = 'chess_translate_cache';
 const CACHE_MAX_ENTRIES = 500;
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 const TRANSLATE_DEBUG = __DEV__;
 
 export type TranslateResult = { text: string } | { error: string };
@@ -129,11 +129,18 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * UTF-8 でレスポンステキストをパース（iOS WebView/Native の文字化け対策）
+ * UTF-8 でレスポンステキストをパース（iOS の fetch/res.text 文字化け対策）
+ * iOS では arrayBuffer + TextDecoder で明示的に UTF-8 を指定
  */
 async function parseJsonFromResponse(res: Response): Promise<Record<string, unknown> | null> {
   try {
-    const rawText = await res.text();
+    let rawText: string;
+    if (Platform.OS === 'ios') {
+      const buf = await res.arrayBuffer();
+      rawText = new TextDecoder('utf-8').decode(buf);
+    } else {
+      rawText = await res.text();
+    }
     if (TRANSLATE_DEBUG) {
       console.log('[translate] response status:', res.status, 'body length:', rawText?.length, 'preview:', rawText?.slice(0, 80));
     }

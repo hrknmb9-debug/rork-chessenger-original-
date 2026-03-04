@@ -80,14 +80,22 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders } }
       );
     }
-    // 文字化け対策: URLエンコードや不正エンコーディングをデコード
+    // 文字化け対策: URLエンコード（スペース混入含む）を必ずデコード
     let output = translated;
-    if (typeof output === 'string' && /%[0-9A-Fa-f]{2}/.test(output)) {
+    if (typeof output === 'string' && (/%[0-9A-Fa-f]{2}/.test(output) || /%\s*[0-9A-Fa-f]/.test(output))) {
       try {
-        const decoded = decodeURIComponent(output.replace(/\s+/g, ''));
-        if (decoded && !/%[0-9A-Fa-f]{2}/.test(decoded)) output = decoded;
+        const compact = output.replace(/\s+/g, '');
+        let decoded = decodeURIComponent(compact);
+        if (decoded && /%[0-9A-Fa-f]{2}/.test(decoded)) {
+          try {
+            decoded = decodeURIComponent(decoded);
+          } catch {
+            /* 二重デコード失敗時は1回目を使用 */
+          }
+        }
+        if (decoded && decoded.length > 0) output = decoded;
       } catch {
-        // デコード失敗時は元の文字列を使用
+        /* デコード失敗時は元の文字列を使用 */
       }
     }
     // UTF-8 で正しく JSON シリアライズ（Deno はデフォルトで UTF-8）
