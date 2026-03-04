@@ -26,7 +26,7 @@ async function translateGoogle(text: string, target: string, source: string, api
     if (source && source !== 'auto') body.source = source;
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Accept': 'application/json; charset=utf-8' },
       body: JSON.stringify(body),
     });
     if (!res.ok) return null;

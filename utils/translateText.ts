@@ -207,24 +207,28 @@ function fetchJsonViaXHRText(
       xhr.setRequestHeader(k, v);
     }
     xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const raw = xhr.responseText ?? xhr.response;
+      const status = xhr.status;
+      const raw = xhr.responseText ?? xhr.response;
+      if (__DEV__ && Platform.OS === 'ios') {
+        console.log('[translate:ios] XHR onload status=', status);
+        console.log('[translate:ios] XHR raw response (preview):', typeof raw === 'string' ? raw.slice(0, 200) + (raw.length > 200 ? '...' : '') : String(raw));
+      }
+      if (status >= 200 && status < 300) {
         if (typeof raw === 'string' && raw.trim()) {
           try {
             const text = raw.trim();
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] XHR response received, len=', text.length);
             const parsed = JSON.parse(text) as Record<string, unknown>;
             if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] JSON parse OK');
             resolve(parsed);
           } catch (e) {
-            if (TRANSLATE_DEBUG) console.warn('[translate] XHR JSON parse failed:', e);
+            if (TRANSLATE_DEBUG) console.warn('[translate:ios] XHR JSON parse failed:', e, 'raw preview:', String(raw).slice(0, 100));
             resolve(null);
           }
         } else {
           resolve(null);
         }
       } else {
-        if (TRANSLATE_DEBUG) console.warn('[translate] XHR status', xhr.status);
+        if (TRANSLATE_DEBUG) console.warn('[translate:ios] XHR status', status);
         resolve(null);
       }
     };
@@ -279,43 +283,52 @@ async function translateViaEdgeFunction(
     const url = `${SUPABASE_URL}/functions/v1/translate`;
     const bodyStr = JSON.stringify({ text, targetLang, sourceLang });
     const headers: Record<string, string> = {
-      'Accept': 'application/json',
+      'Accept': 'application/json; charset=utf-8',
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json; charset=utf-8',
     };
-    if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Request before send', 'target:', targetLang, 'len:', text.length);
+    if (__DEV__ && Platform.OS === 'ios') {
+      console.log('[translate:ios] === Request before send ===');
+      console.log('[translate:ios] url=', url);
+      console.log('[translate:ios] targetLang=', targetLang, 'sourceLang=', sourceLang, 'textLen=', text.length);
+      console.log('[translate:ios] body preview=', bodyStr.slice(0, 120) + (bodyStr.length > 120 ? '...' : ''));
+    }
 
     if (Platform.OS !== 'web') {
-      // RN iOS/Android: XHR responseType 'text' で確実に取得、res.text()+JSON.parse 二段構え
+      // RN iOS/Android: XHR responseType 'text' で確実に取得、一度 text で受け取り JSON.parse
       let data = await fetchJsonViaXHR(url, { method: 'POST', headers, body: bodyStr });
       if (!data) {
-        // フォールバック: fetch + res.text() + JSON.parse（iOS JSON パースエラー対策）
+        // フォールバック: fetch + res.text()（response.json() は使わない）
         try {
           const res = await fetch(url, { method: 'POST', headers, body: bodyStr });
-          if (res.ok) {
-            const rawText = await res.text();
-            if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Fetch fallback response len=', rawText?.length ?? 0);
-            if (rawText?.trim()) {
+          if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Fetch fallback status=', res.status);
+          const rawText = await res.text();
+          if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Fetch fallback raw (preview):', rawText?.slice(0, 200) ?? '');
+          if (res.ok && rawText?.trim()) {
+            try {
               data = JSON.parse(rawText.trim()) as Record<string, unknown>;
               if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Fetch fallback JSON parse OK');
+            } catch (pe) {
+              if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Fetch fallback parse failed:', pe);
             }
           }
         } catch (e) {
-          if (TRANSLATE_DEBUG) console.warn('[translate] fetch fallback failed:', e);
+          if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Fetch fallback error:', e);
         }
       }
       if (!data) {
-        if (TRANSLATE_DEBUG) console.warn('[translate] empty or invalid response');
-        return null;
+        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] empty/invalid response → fallback to original text');
+        return { text }; // 可能性1フォールバック: JSON壊れ時は元テキストを返す
       }
       const err = data.error as string | undefined;
       if (err) {
-        if (TRANSLATE_DEBUG) console.warn('[translate] API error:', err);
-        return null;
+        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] API error:', err);
+        return { text }; // フォールバック: 元テキスト
       }
       const raw = (data.translatedText ?? data.text) as string | undefined;
       if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-      return null;
+      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] no translatedText field → fallback');
+      return { text };
     }
 
     try {
@@ -331,24 +344,25 @@ async function translateViaEdgeFunction(
         }
       }
       if (!data) {
-        if (TRANSLATE_DEBUG) console.warn('[translate] Empty or invalid response');
-        return null;
+        if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] Web path empty response → fallback');
+        return { text };
       }
       const err = data.error as string | undefined;
       if (err) {
         if (TRANSLATE_DEBUG) console.warn('[translate] API error:', err);
-        return null;
+        return { text };
       }
       const raw = (data.translatedText ?? data.text) as string | undefined;
       if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
-      return null;
+      return { text };
     } catch (e) {
-      if (TRANSLATE_DEBUG) console.warn('[translate] fetch failed:', e);
-      return null;
+      if (__DEV__ && Platform.OS === 'ios') console.warn('[translate:ios] fetch failed:', e);
+      return { text };
     }
   };
 
-  // iOS: invoke は Supabase クライアント内部の fetch を使い、RN の res.text 不具合を避けられないためスキップ
+  // 可能性4: iOS では invoke をスキップして doFetch を直接使用（invoke 前後でログは doFetch 内で出力）
+  if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Skip supabase.functions.invoke, using direct fetch/XHR');
   if (Platform.OS !== 'ios') {
     try {
       const { data, error } = await supabase.functions.invoke('translate', {
@@ -381,13 +395,21 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
   const encoded = encodeURIComponent(text.slice(0, 500));
   const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=${langpair}`;
 
-  const myMemoryHeaders = { 'Accept': 'application/json' };
+  const myMemoryHeaders = { 'Accept': 'application/json; charset=utf-8' };
   if (Platform.OS !== 'web') {
     let data = await fetchJsonViaXHR(url, { method: 'GET', headers: myMemoryHeaders });
     if (!data) {
       try {
-        const res = await fetch(url);
-        if (res.ok) data = await res.json();
+        const res = await fetch(url, { headers: myMemoryHeaders });
+        if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] MyMemory fallback status=', res.status);
+        const rawText = await res.text();
+        if (res.ok && rawText?.trim()) {
+          try {
+            data = JSON.parse(rawText.trim()) as Record<string, unknown>;
+          } catch {
+            /* ignore */
+          }
+        }
       } catch {
         /* ignore */
       }
@@ -436,9 +458,12 @@ export async function translateText(
   if (cached) return { text: safeDecodeTranslated(cached) };
 
   return withLimit(async () => {
-    if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Invoke Edge Function, target=', normalizedTarget);
+    if (__DEV__ && Platform.OS === 'ios') {
+      console.log('[translate:ios] ========== translateText START ==========');
+      console.log('[translate:ios] target=', normalizedTarget, 'source=', sourceLang);
+    }
     const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, accessToken);
-    if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Edge result', viaEdge ? 'OK' : 'null');
+    if (__DEV__ && Platform.OS === 'ios') console.log('[translate:ios] Edge result', viaEdge ? 'OK' : 'fallback/null');
     if (viaEdge && 'text' in viaEdge) {
       const decoded = safeDecodeTranslated(viaEdge.text);
       if (decoded.trim() && decoded.trim() !== text.trim()) {

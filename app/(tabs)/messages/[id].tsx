@@ -248,11 +248,13 @@ function MessageBubble({
 }) {
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [renderKey, setRenderKey] = useState(0); // 可能性3: 翻訳完了時に更新し iOS 強制再描画
   const { isImage, value } = decodeMessageContent(item.text);
 
   // item.text や language 変更時に翻訳をリセット（iOS再描画保証）
   useEffect(() => {
     setTranslatedText(null);
+    setRenderKey(0);
   }, [item.text, item.id, language]);
   const imageUrl = isImage ? (value || (item.imageUrl ?? undefined)) : (item.imageUrl ?? undefined);
   const hasTranslatableText = !isImage && item.text?.trim().length > 0;
@@ -273,6 +275,7 @@ function MessageBubble({
         if (decoded.trim()) {
           const doSet = () => {
             setTranslatedText(decoded);
+            setRenderKey(prev => prev + 1); // 可能性3: 全く新しい要素として強制再マウント
             if (__DEV__ && Platform.OS === 'ios') console.log('[translate:msg] State updated', item.id, 'len=', decoded.length);
           };
           if (Platform.OS === 'ios') {
@@ -358,7 +361,7 @@ function MessageBubble({
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
             <>
-              <Text key={`msg-${item.id}-${isTranslating ? 'l' : translatedText ? 't' : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+              <Text key={`msg-${item.id}-${isTranslating ? 'l' : translatedText ? `t-${renderKey}` : 'o'}`} style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
                 {displayText}
               </Text>
               {translatedText && displayText.trim() !== (item.text ?? '').trim() && (

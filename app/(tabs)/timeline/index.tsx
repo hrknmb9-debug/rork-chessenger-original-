@@ -70,11 +70,13 @@ function CommentItem({
 }) {
   const [translated, setTranslated] = useState<string | null>(null);
   const [translating, setTranslating] = useState(false);
+  const [renderKey, setRenderKey] = useState(0); // 可能性3: 翻訳完了時に更新し iOS 強制再描画
   const commentText = language === 'en' && comment.contentEn ? comment.contentEn : comment.content;
   const displayText = (translated ? decodeForDisplay(translated) : decodeForDisplay(commentText ?? '')) ?? '';
 
   useEffect(() => {
     setTranslated(null);
+    setRenderKey(0);
   }, [comment.id, commentText, language]);
 
   const onTranslate = useCallback(async () => {
@@ -92,6 +94,7 @@ function CommentItem({
         if (decoded.trim()) {
           const doSet = () => {
             setTranslated(decoded);
+            setRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
             if (__DEV__ && Platform.OS === 'ios') console.log('[translate:comment] State updated', comment.id, 'len=', decoded.length);
           };
           if (Platform.OS === 'ios') {
@@ -114,7 +117,7 @@ function CommentItem({
         <SafeImage uri={comment.author.avatar} name={comment.author.name} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surfaceLight }} contentFit="cover" />
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
-          <Text key={`comment-${comment.id}-${translating ? 'l' : translated ? 't' : 'o'}`} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText ?? ''}</Text>
+          <Text key={`comment-${comment.id}-${translating ? 'l' : translated ? `t-${renderKey}` : 'o'}`} style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText ?? ''}</Text>
           {translated && displayText.trim() !== (commentText ?? '').trim() && (
             <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
           )}
@@ -177,6 +180,7 @@ function PostCard({
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedEventTitle, setTranslatedEventTitle] = useState<string | null>(null);
   const [translatedEventLocation, setTranslatedEventLocation] = useState<string | null>(null);
+  const [postRenderKey, setPostRenderKey] = useState(0); // 可能性3: 翻訳完了時に更新し iOS 強制再描画
   const heartScale = useRef(new Animated.Value(1)).current;
   const userId = currentUserId ?? 'me';
   const isLiked = post.likes.includes(userId);
@@ -210,6 +214,7 @@ function PostCard({
 
   useEffect(() => {
     setTranslatedContent(null);
+    setPostRenderKey(0);
   }, [post.id, contentText, language]);
 
   const handleTranslate = useCallback(async () => {
@@ -228,6 +233,7 @@ function PostCard({
         if (decoded.trim()) {
           const doSet = () => {
             setTranslatedContent(decoded);
+            setPostRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
             if (__DEV__ && Platform.OS === 'ios') console.log('[translate:post] State updated', post.id, 'len=', decoded.length);
           };
           if (Platform.OS === 'ios') {
@@ -260,6 +266,7 @@ function PostCard({
       const doSet = (setter: (v: string) => void, val: string, label: string) => {
         const fn = () => {
           setter(val);
+          setPostRenderKey(prev => prev + 1); // 可能性3: 強制再マウント
           if (__DEV__ && Platform.OS === 'ios') console.log('[translate:event] State updated', label, 'len=', val.length);
         };
         if (Platform.OS === 'ios') InteractionManager.runAfterInteractions(fn);
@@ -384,7 +391,7 @@ function PostCard({
       {/* イベント投稿の場合: イベントカードをコンテンツより先に表示（詳細を強調） */}
       {post.event && (
         <View style={{ backgroundColor: colors.greenMuted, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.green + '33', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
-          <Text key={`ev-title-${post.id}-${translatedEventTitle ? 't' : 'o'}`} style={{ fontSize: 16, fontWeight: '700' as const, color: colors.textPrimary, marginBottom: 8, textAlign: isRTL(language) ? 'right' : 'left' }}>{displayEventTitle}</Text>
+          <Text key={`ev-title-${post.id}-${translatedEventTitle ? `t-${postRenderKey}` : 'o'}`} style={{ fontSize: 16, fontWeight: '700' as const, color: colors.textPrimary, marginBottom: 8, textAlign: isRTL(language) ? 'right' : 'left' }}>{displayEventTitle}</Text>
           <View style={{ gap: 4, marginBottom: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Calendar size={13} color={colors.green} />
@@ -393,7 +400,7 @@ function PostCard({
             {displayEventLocation ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <MapPin size={13} color={colors.green} />
-                <Text key={`ev-loc-${post.id}-${translatedEventLocation ? 't' : 'o'}`} style={{ fontSize: 13, color: colors.textSecondary }}>{displayEventLocation}</Text>
+                <Text key={`ev-loc-${post.id}-${translatedEventLocation ? `t-${postRenderKey}` : 'o'}`} style={{ fontSize: 13, color: colors.textSecondary }}>{displayEventLocation}</Text>
               </View>
             ) : null}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -447,7 +454,7 @@ function PostCard({
       )}
 
       <View style={{ marginBottom: 12 }}>
-        <Text key={`post-${post.id}-${isTranslating ? 'l' : translatedContent ? 't' : 'o'}`} style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
+        <Text key={`post-${post.id}-${isTranslating ? 'l' : translatedContent ? `t-${postRenderKey}` : 'o'}`} style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
           {decodeForDisplay((isTranslating ? contentText : displayContent) ?? '') ?? ''}
         </Text>
         {isShowingTranslated && decodeForDisplay(displayContent ?? '').trim() !== (contentText ?? '').trim() && (
