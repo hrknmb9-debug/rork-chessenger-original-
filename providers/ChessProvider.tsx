@@ -258,24 +258,39 @@ export const [ChessProvider, useChess] = createContextHook(() => {
   ): Promise<TimelinePost[]> => {
     let events = [...(allEvents ?? [])];
     let epData = [...allEventParticipants];
-    const eventPostIds = posts.filter(p => (p.type as string) === 'event').map(p => p.id);
-    if (eventPostIds.length > 0) {
-      const hasEventFor = new Set(events.map((e: Record<string, unknown>) => String(e.post_id ?? '')));
-      const missingIds = eventPostIds.filter(id => !hasEventFor.has(id));
-      if (missingIds.length > 0) {
-        const { data: extra } = await supabase.from('events').select('*').in('post_id', missingIds);
-        if (extra && extra.length > 0) {
-          events = [...events, ...extra];
-          const extraEventIds = extra.map((e: Record<string, unknown>) => e.id as string);
-          const existingEpIds = new Set(epData.map(ep => ep.event_id));
-          const newIds = extraEventIds.filter(id => !existingEpIds.has(id));
-          if (newIds.length > 0) {
-            const { data: epExtra } = await supabase
-              .from('event_participants')
-              .select('event_id, user_id')
-              .in('event_id', newIds);
-            if (epExtra) epData = [...epData, ...epExtra];
-          }
+    const postIdSetFromPosts = new Set(posts.map(p => p.id));
+    const eventPostIds = [
+      ...new Set([
+        ...posts.filter(p => (p.type as string) === 'event').map(p => p.id),
+        ...events.map((e: Record<string, unknown>) => String(e.post_id ?? '')).filter(Boolean),
+      ]),
+    ].filter(id => postIdSetFromPosts.has(id));
+    const hasEventFor = new Set(events.map((e: Record<string, unknown>) => String(e.post_id ?? '')));
+    const missingIds = eventPostIds.filter(id => !hasEventFor.has(id));
+    if (missingIds.length > 0) {
+      let extra: Record<string, unknown>[] | null = null;
+      const { data: extraIn } = await supabase.from('events').select('*').in('post_id', missingIds);
+      if (extraIn && extraIn.length > 0) {
+        extra = extraIn;
+      } else {
+        const { data: extraFull } = await supabase.from('events').select('*');
+        if (extraFull && extraFull.length > 0) {
+          extra = extraFull.filter((e: Record<string, unknown>) =>
+            missingIds.includes(String(e.post_id ?? ''))
+          );
+        }
+      }
+      if (extra && extra.length > 0) {
+        events = [...events, ...extra];
+        const extraEventIds = extra.map((e: Record<string, unknown>) => e.id as string);
+        const existingEpIds = new Set(epData.map(ep => ep.event_id));
+        const newIds = extraEventIds.filter(id => !existingEpIds.has(id));
+        if (newIds.length > 0) {
+          const { data: epExtra } = await supabase
+            .from('event_participants')
+            .select('event_id, user_id')
+            .in('event_id', newIds);
+          if (epExtra) epData = [...epData, ...epExtra];
         }
       }
     }
@@ -420,7 +435,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
   const applyEventCacheToPosts = useCallback((posts: TimelinePost[], prev?: TimelinePost[]): TimelinePost[] => {
     const prevMap = prev?.length ? new Map(prev.map(p => [p.id, p])) : null;
     return posts.map(p => {
-      if (p.event) return p;
+      if (p.event) {
+        eventCacheRef.current.set(p.id, p.event);
+        return p;
+      }
       const prevPost = prevMap?.get(p.id);
       if (prevPost?.event) return { ...p, type: 'event' as const, event: prevPost.event };
       const cached = eventCacheRef.current.get(p.id);
@@ -653,27 +671,30 @@ export const [ChessProvider, useChess] = createContextHook(() => {
             .select('post_id, user_id')
             .in('post_id', postIds);
 
-          let eventsData: Record<string, unknown>[] | null = null;
-          let eventsError: { message?: string } | null = null;
-          const { data: eventsFirst, error: eventsErr } = await supabase
+          const postIdSet = new Set(postIds);
+          let eventsData: Record<string, unknown>[] = [];
+          const { data: eventsFiltered, error: eventsErr } = await supabase
             .from('events')
             .select('*')
             .in('post_id', postIds);
-          eventsData = eventsFirst;
-          eventsError = eventsErr;
-
-          if (eventsError) {
-            console.log('ChessProvider: events fetch error (retrying full)', eventsError.message);
-            const { data: eventsFallback } = await supabase.from('events').select('*');
-            if (eventsFallback && eventsFallback.length > 0) {
-              const postIdSet = new Set(postIds);
-              eventsData = eventsFallback.filter((e: Record<string, unknown>) =>
-                postIdSet.has((e.post_id as string) ?? '')
+          if (eventsErr) {
+            console.log('ChessProvider: events .in() error, trying full fetch', eventsErr.message);
+          }
+          if (eventsFiltered && eventsFiltered.length > 0) {
+            eventsData = eventsFiltered.filter((e: Record<string, unknown>) =>
+              postIdSet.has(String(e.post_id ?? ''))
+            );
+          }
+          if (eventsData.length === 0) {
+            const { data: eventsFull } = await supabase.from('events').select('*');
+            if (eventsFull && eventsFull.length > 0) {
+              eventsData = eventsFull.filter((e: Record<string, unknown>) =>
+                postIdSet.has(String(e.post_id ?? ''))
               );
             }
           }
 
-          const eventIds = (eventsData ?? []).map((e: Record<string, unknown>) => e.id as string);
+          const eventIds = eventsData.map((e: Record<string, unknown>) => e.id as string);
           let eventParticipantsData: { event_id: string; user_id: string }[] = [];
           if (eventIds.length > 0) {
             const { data: epData } = await supabase
@@ -1145,26 +1166,29 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           .select('post_id, user_id')
           .in('post_id', postIds);
 
-        let eventsData: Record<string, unknown>[] | null = null;
-        let eventsError: Error | null = null;
-        const { data: eventsFirst, error: eventsErr } = await supabase
+        const postIdSet = new Set(postIds);
+        let eventsData: Record<string, unknown>[] = [];
+        const { data: eventsFiltered, error: eventsErr } = await supabase
           .from('events')
           .select('*')
           .in('post_id', postIds);
-        eventsData = eventsFirst;
-        eventsError = eventsErr;
-
-        if (eventsError) {
-          console.log('ChessProvider: events fetch error (retrying full)', eventsError.message);
-          const { data: eventsFallback } = await supabase.from('events').select('*');
-          if (eventsFallback && eventsFallback.length > 0) {
-            const postIdSet = new Set(postIds);
-            eventsData = eventsFallback.filter((e: Record<string, unknown>) =>
-              postIdSet.has((e.post_id as string) ?? '')
+        if (eventsErr) {
+          console.log('ChessProvider: events .in() error, trying full fetch', eventsErr.message);
+        }
+        if (eventsFiltered && eventsFiltered.length > 0) {
+          eventsData = eventsFiltered.filter((e: Record<string, unknown>) =>
+            postIdSet.has(String(e.post_id ?? ''))
+          );
+        }
+        if (eventsData.length === 0) {
+          const { data: eventsFull } = await supabase.from('events').select('*');
+          if (eventsFull && eventsFull.length > 0) {
+            eventsData = eventsFull.filter((e: Record<string, unknown>) =>
+              postIdSet.has(String(e.post_id ?? ''))
             );
           }
         }
-        const eventIds = (eventsData ?? []).map((e: Record<string, unknown>) => e.id as string);
+        const eventIds = eventsData.map((e: Record<string, unknown>) => e.id as string);
         let epData: { event_id: string; user_id: string }[] = [];
         if (eventIds.length > 0) {
           const { data } = await supabase
@@ -1178,7 +1202,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           postsData,
           commentsData ?? [],
           likesData ?? [],
-          eventsData ?? [],
+          eventsData,
           epData,
           blockedUsers
         );
