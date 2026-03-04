@@ -40,13 +40,6 @@ const CACHE_MAX_ENTRIES = 500;
 const CACHE_VERSION = 7;
 const TRANSLATE_DEBUG = __DEV__;
 
-// #region agent log
-const DEBUG_LOG = (msg: string, data: Record<string, unknown>) => {
-  try { console.dir({ [msg]: data }, { depth: 5 }); } catch {}
-  try { fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'2421b3'},body:JSON.stringify({sessionId:'2421b3',location:'translateText',message:msg,data,timestamp:Date.now()})}).catch(()=>{}); } catch {}
-};
-// #endregion
-
 export type TranslateResult = { text: string } | { error: string };
 export type TranslateOptions = { itemId?: string };
 
@@ -315,9 +308,6 @@ function fetchJsonViaXHRText(
         console.log('[translate] XHR onload status=', status, 'Platform=', Platform.OS);
         console.dir({ xhrResponse: { status, rawPreview: rawStr.slice(0, 400), rawLen: rawStr.length } }, { depth: 3 });
       }
-      // #region agent log
-      try { const p = JSON.parse(rawStr); DEBUG_LOG('XHR_RAW_RESPONSE', { status, platform: Platform.OS, rawPreview: rawStr.slice(0, 500), rawLen: rawStr.length, keys: Object.keys(p ?? {}) }); } catch { DEBUG_LOG('XHR_RAW_RESPONSE', { status, platform: Platform.OS, rawPreview: rawStr.slice(0, 500), parseFailed: true }); }
-      // #endregion
       if (status >= 200 && status < 300) {
         if (typeof raw === 'string' && raw.trim()) {
           try {
@@ -392,7 +382,13 @@ async function translateViaEdgeFunction(
   accessToken?: string | null
 ): Promise<TranslateResult | null> {
   const sanitized = sanitizePayload(text);
-  const token = accessToken ?? SUPABASE_ANON_KEY;
+  let token = accessToken ?? SUPABASE_ANON_KEY;
+  try {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed?.session?.access_token) token = refreshed.session.access_token;
+  } catch {
+    /* use existing token */
+  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     if (TRANSLATE_DEBUG) console.warn('[translate] Missing SUPABASE_URL or ANON_KEY');
     return null;
@@ -451,17 +447,11 @@ async function translateViaEdgeFunction(
         }
       }
       if (!data) {
-        // #region agent log
-        DEBUG_LOG('RN_EMPTY_DATA', { platform: Platform.OS });
-        // #endregion
         if (__DEV__) console.warn('[translate] empty/invalid response → fallback');
         return { text };
       }
       const err = data.error as string | undefined;
       if (err) {
-        // #region agent log
-        DEBUG_LOG('RN_API_ERROR', { platform: Platform.OS, error: err });
-        // #endregion
         if (__DEV__) console.warn('[translate] API error:', err);
         return { text };
       }
@@ -469,9 +459,6 @@ async function translateViaEdgeFunction(
       const TRANSLATE_RAW_FIRST = true; // 一時 true: 生テキスト優先で Base64 不一致を検証
       const base64 = data.translatedTextBase64 as string | undefined;
       const raw = (data.translatedText ?? data.text) as string | undefined;
-      // #region agent log
-      DEBUG_LOG('RN_PARSE_START', { platform: Platform.OS, hasBase64: !!base64, hasRaw: !!raw, rawType: typeof raw, bodyKeys: Object.keys(data) });
-      // #endregion
       if (__DEV__) console.dir({ translateResponse: data, hasBase64: !!base64, hasRaw: !!raw });
       let finalText = '';
       if (TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
@@ -480,18 +467,12 @@ async function translateViaEdgeFunction(
       }
       if (!finalText && base64 && typeof base64 === 'string') {
         const decoded = decodeBase64ToUtf8(base64);
-        // #region agent log
-        DEBUG_LOG('RN_BASE64_DECODE', { platform: Platform.OS, decodedLen: decoded?.length ?? 0, decodedPreview: decoded?.slice(0, 100) ?? '(empty)' });
-        // #endregion
         if (__DEV__) console.log('[translate] RAW RESULT:', decoded?.slice(0, 80) ?? '(empty)');
         if (decoded?.trim()) finalText = safeDecodeTranslated(decoded);
       }
       if (!finalText && !TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
         finalText = safeDecodeTranslated(raw);
       }
-      // #region agent log
-      DEBUG_LOG('RN_FINAL', { platform: Platform.OS, finalLen: finalText?.length ?? 0, finalPreview: finalText?.slice(0, 80) ?? '(none)' });
-      // #endregion
       if (finalText) return { text: finalText };
       if (__DEV__) console.warn('[translate] No valid translatedTextBase64 nor translatedText');
       return { text };
@@ -500,9 +481,6 @@ async function translateViaEdgeFunction(
     try {
       const res = await fetch(url, { method: 'POST', headers, body: bodyStr });
       const rawText = await res.text();
-      // #region agent log
-      DEBUG_LOG('WEB_FETCH_RESPONSE', { status: res.status, rawPreview: rawText?.slice(0, 500), rawLen: rawText?.length });
-      // #endregion
       if (__DEV__) console.dir({ webTranslateRes: { status: res.status, bodyPreview: rawText?.slice(0, 300) } }, { depth: 3 });
       let data: Record<string, unknown> | null = null;
       if (rawText?.trim()) {
@@ -513,20 +491,15 @@ async function translateViaEdgeFunction(
         }
       }
       if (!data) {
-        // #region agent log
-        DEBUG_LOG('WEB_EMPTY_DATA', {});
-        // #endregion
         return { text };
       }
       const err = data.error as string | undefined;
       if (err) {
-        DEBUG_LOG('WEB_API_ERROR', { error: err });
         return { text };
       }
       const base64 = data.translatedTextBase64 as string | undefined;
       const raw = (data.translatedText ?? data.text) as string | undefined;
       const TRANSLATE_RAW_FIRST = true;
-      DEBUG_LOG('WEB_PARSE', { hasBase64: !!base64, hasRaw: !!raw, bodyKeys: Object.keys(data) });
       let finalText = '';
       if (TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
         finalText = safeDecodeTranslated(raw);
@@ -537,7 +510,6 @@ async function translateViaEdgeFunction(
       if (!finalText && !TRANSLATE_RAW_FIRST && raw && typeof raw === 'string') {
         finalText = safeDecodeTranslated(raw);
       }
-      DEBUG_LOG('WEB_FINAL', { finalLen: finalText?.length ?? 0 });
       if (finalText) return { text: finalText };
       return { text };
     } catch (e) {
@@ -553,9 +525,6 @@ async function translateViaEdgeFunction(
       const { data, error } = await supabase.functions.invoke('translate', {
         body: { text: sanitized, targetLang, sourceLang },
       });
-      // #region agent log
-      DEBUG_LOG('INVOKE_RESULT', { platform: Platform.OS, hasError: !!error, errorMsg: error?.message, hasData: !!data, dataKeys: data ? Object.keys(data) : [] });
-      // #endregion
       if (__DEV__) console.dir({ invokeResult: { data, error } }, { depth: 4 });
       if (TRANSLATE_DEBUG && error) console.warn('[translate] invoke error:', error?.message ?? error);
       if (!error) {
@@ -570,7 +539,6 @@ async function translateViaEdgeFunction(
       }
     } catch (e) {
       if (TRANSLATE_DEBUG) console.warn('[translate] invoke exception:', e);
-      DEBUG_LOG('INVOKE_EXCEPTION', { err: String(e) });
     }
   }
 
