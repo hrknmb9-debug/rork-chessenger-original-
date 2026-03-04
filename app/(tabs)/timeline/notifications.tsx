@@ -4,21 +4,21 @@ import { useFocusEffect } from 'expo-router';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { AppNotification } from '@/types';
-import { getTimeAgo } from '@/utils/translations';
+import { getTimeAgo, t } from '@/utils/translations';
 
 const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
-  const { notifications, markAllNotificationsRead, language } = useChess();
+  const { notifications, markTimelineNotificationsRead, language } = useChess();
   const filteredNotifications = notifications.filter(n =>
     TIMELINE_NOTIFICATION_TYPES.includes(n.type as typeof TIMELINE_NOTIFICATION_TYPES[number])
   );
 
   useFocusEffect(
     useCallback(() => {
-      markAllNotificationsRead();
-    }, [markAllNotificationsRead])
+      markTimelineNotificationsRead();
+    }, [markTimelineNotificationsRead])
   );
 
   const renderItem = useCallback(
@@ -41,7 +41,7 @@ export default function NotificationsScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {filteredNotifications.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>通知はありません</Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('no_notifications', language)}</Text>
         </View>
       ) : (
         <FlatList

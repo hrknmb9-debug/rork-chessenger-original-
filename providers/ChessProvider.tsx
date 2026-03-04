@@ -1868,6 +1868,29 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId]);
 
+  /** タイムライン通知画面表示時のみ呼ぶ。タイムライン関連タイプのみ既読にし、メッセージ通知は残す */
+  const markTimelineNotificationsRead = useCallback(async () => {
+    const types = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
+    setNotifications(prev =>
+      prev.map(n => (types.includes(n.type as typeof types[number]) ? { ...n, read: true } : n))
+    );
+    try {
+      if (currentUserId) {
+        const { data: rows } = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .eq('is_read', false)
+          .in('type', types);
+        if (rows?.length) {
+          await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUserId).in('type', types);
+        }
+      }
+    } catch (e) {
+      console.log('Mark timeline notifications read failed', e);
+    }
+  }, [currentUserId]);
+
   const refreshNotifications = useCallback(async () => {
     if (!currentUserId) return;
     try {
@@ -2224,6 +2247,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     disputeResultReport,
     markNotificationRead,
     markAllNotificationsRead,
+    markTimelineNotificationsRead,
     refreshNotifications,
     refreshPlayers,
     refreshTimeline,

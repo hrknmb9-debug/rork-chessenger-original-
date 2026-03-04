@@ -9,9 +9,28 @@ import { supabase } from '@/utils/supabaseClient';
 
 const TRANSLATE_CACHE_KEY = 'chess_translate_cache';
 const CACHE_MAX_ENTRIES = 500;
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 export type TranslateResult = { text: string } | { error: string };
+
+/** URLエンコードされた翻訳結果をデコード（文字化け対策） */
+function safeDecodeTranslated(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return text;
+  try {
+    if (/%[0-9A-Fa-f]{2}/.test(trimmed)) {
+      const withoutSpaces = trimmed.replace(/\s+/g, '');
+      const decoded = decodeURIComponent(withoutSpaces);
+      if (decoded && decoded.length > 0 && !/%[0-9A-Fa-f]{2}/.test(decoded)) {
+        return decoded;
+      }
+    }
+  } catch {
+    // デコード失敗時は元の文字列を返す
+  }
+  return text;
+}
 
 /** 言語コード正規化 (ISO 639-1) */
 function normalizeLang(lang: string): string {
@@ -107,9 +126,9 @@ async function translateViaEdgeFunction(
       body: { text, targetLang, sourceLang },
     });
     if (!error) {
-      const translated = data?.translatedText ?? data?.text;
-      if (translated && typeof translated === 'string') {
-        return { text: translated };
+      const raw = data?.translatedText ?? data?.text;
+      if (raw && typeof raw === 'string') {
+        return { text: safeDecodeTranslated(raw) };
       }
     }
   } catch {
@@ -130,9 +149,9 @@ async function translateViaEdgeFunction(
       });
       if (res.ok) {
         const data = await res.json();
-        const translated = data?.translatedText ?? data?.text;
-        if (translated && typeof translated === 'string') {
-          return { text: translated };
+        const raw = data?.translatedText ?? data?.text;
+        if (raw && typeof raw === 'string') {
+          return { text: safeDecodeTranslated(raw) };
         }
       }
     } catch {
@@ -154,8 +173,8 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    const translated = data?.responseData?.translatedText;
-    if (translated) return { text: translated };
+    const raw = data?.responseData?.translatedText;
+    if (raw && typeof raw === 'string') return { text: safeDecodeTranslated(raw) };
     return null;
   } catch {
     return null;
@@ -179,18 +198,20 @@ export async function translateText(
   if (sourceLang === normalizedTarget) return { text };
 
   const cached = await getCached(text, normalizedTarget, sourceLang);
-  if (cached) return { text: cached };
+  if (cached) return { text: safeDecodeTranslated(cached) };
 
   const viaEdge = await translateViaEdgeFunction(text, normalizedTarget, sourceLang, _accessToken);
   if (viaEdge && 'text' in viaEdge) {
-    setCache(text, normalizedTarget, sourceLang, viaEdge.text);
-    return viaEdge;
+    const decoded = safeDecodeTranslated(viaEdge.text);
+    setCache(text, normalizedTarget, sourceLang, decoded);
+    return { text: decoded };
   }
 
   const viaMyMemory = await translateViaMyMemory(text, normalizedTarget, sourceLang);
   if (viaMyMemory && 'text' in viaMyMemory) {
-    setCache(text, normalizedTarget, sourceLang, viaMyMemory.text);
-    return viaMyMemory;
+    const decoded = safeDecodeTranslated(viaMyMemory.text);
+    setCache(text, normalizedTarget, sourceLang, decoded);
+    return { text: decoded };
   }
 
   return { error: 'Translation failed' };

@@ -82,8 +82,11 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const decoded = typeof translated === 'string' && /%[0-9A-Fa-f]{2}/.test(translated)
+      ? (() => { try { return decodeURIComponent(translated.replace(/\s+/g, '')); } catch { return translated; } })()
+      : translated;
     return new Response(
-      JSON.stringify({ translatedText: translated }),
+      JSON.stringify({ translatedText: decoded }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e) {

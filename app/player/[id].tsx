@@ -40,7 +40,6 @@ import {
   formatRating,
 } from '@/utils/helpers';
 import { t, getCountryFlag, getCountryName } from '@/utils/translations';
-import { LanguageSelector } from '@/components/LanguageSelector';
 import { BackNavButton } from '@/components/BackNavButton';
 import { PlayStyle } from '@/types';
 
@@ -177,16 +176,13 @@ export default function PlayerDetailScreen() {
           headerTintColor: colors.textPrimary,
           headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerRight: () => (
-            <View style={styles.headerRight}>
-              <Pressable onPress={handleBlockToggle} style={styles.headerBlockBtn}>
-                {playerBlocked ? (
-                  <ShieldCheck size={20} color={colors.green} />
-                ) : (
-                  <ShieldBan size={20} color={colors.red} />
-                )}
-              </Pressable>
-              <LanguageSelector variant="compact" />
-            </View>
+            <Pressable onPress={handleBlockToggle} style={styles.headerBlockBtn}>
+              {playerBlocked ? (
+                <ShieldCheck size={20} color={colors.green} />
+              ) : (
+                <ShieldBan size={20} color={colors.red} />
+              )}
+            </Pressable>
           ),
         }}
       />
