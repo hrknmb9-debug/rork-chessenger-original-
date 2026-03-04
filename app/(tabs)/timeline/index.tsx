@@ -37,6 +37,7 @@ import {
   CornerDownRight,
   Hourglass,
   Trash2,
+  Languages,
 } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -45,6 +46,7 @@ import { TimelinePost, TimelineComment, TimelineEvent } from '@/types';
 import { t, getTimeAgo } from '@/utils/translations';
 import { uploadTimelineImage } from '@/utils/messageImageUpload';
 import { supabase } from '@/utils/supabaseClient';
+import { translateText, getTargetLanguage } from '@/utils/translateText';
 
 const TEMPLATES = [
   { key: 'beginner', labelKey: 'template_beginner' },
@@ -64,16 +66,47 @@ function CommentItem({
   language: string;
   colors: ThemeColors;
 }) {
+  const [translated, setTranslated] = useState<string | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const commentText = language === 'en' && comment.contentEn ? comment.contentEn : comment.content;
+  const displayText = translated ?? commentText;
+
+  const onTranslate = useCallback(async () => {
+    if (translating || !commentText?.trim()) return;
+    if (translated) {
+      setTranslated(null);
+      return;
+    }
+    setTranslating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await translateText(commentText, getTargetLanguage(language), session?.access_token);
+      if ('text' in result) setTranslated(result.text);
+    } finally {
+      setTranslating(false);
+    }
+  }, [commentText, language, translated, translating]);
+
   return (
     <View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <SafeImage uri={comment.author.avatar} name={comment.author.name} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: colors.surfaceLight }} contentFit="cover" />
         <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}>
           <Text style={{ fontSize: 12, fontWeight: '600' as const, color: colors.textPrimary, marginBottom: 2 }}>{comment.author.name}</Text>
-          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{language === 'en' && comment.contentEn ? comment.contentEn : comment.content}</Text>
-          <Pressable onPress={() => onReply(comment.id)} style={{ marginTop: 4 }}>
-            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>{t('reply', language)}</Text>
-          </Pressable>
+          <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>{displayText}</Text>
+          {translated && (
+            <Text style={{ fontSize: 10, color: colors.textMuted, marginTop: 2, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
+          )}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+            <Pressable onPress={() => onReply(comment.id)}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>{t('reply', language)}</Text>
+            </Pressable>
+            <Pressable onPress={onTranslate} disabled={translating}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' as const }}>
+                {translating ? '...' : translated ? t('original', language) : t('translate', language)}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       </View>
       {comment.replies && comment.replies.length > 0 && (
@@ -118,6 +151,8 @@ function PostCard({
   const [showComments, setShowComments] = useState<boolean>(false);
   const [commentText, setCommentText] = useState<string>('');
   const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [translatedContent, setTranslatedContent] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
   const userId = currentUserId ?? 'me';
   const isLiked = post.likes.includes(userId);
@@ -146,6 +181,28 @@ function PostCard({
   }, [post.comments]);
 
   const contentText = language === 'en' && post.contentEn ? post.contentEn : post.content;
+  const displayContent = translatedContent ?? contentText;
+  const isShowingTranslated = translatedContent !== null;
+
+  const handleTranslate = useCallback(async () => {
+    if (isTranslating || !contentText?.trim()) return;
+    if (isShowingTranslated) {
+      setTranslatedContent(null);
+      return;
+    }
+    setIsTranslating(true);
+    setTranslatedContent(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const targetLang = getTargetLanguage(language);
+      const result = await translateText(contentText, targetLang, session?.access_token);
+      if ('text' in result) setTranslatedContent(result.text);
+    } catch {
+      // ignore
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [contentText, language, isTranslating, isShowingTranslated]);
 
   const getTypeIcon = () => {
     switch (post.type) {
@@ -210,7 +267,7 @@ function PostCard({
   };
 
   return (
-    <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden' }}>
+    <View style={{ marginHorizontal: 16, marginBottom: 18, backgroundColor: colors.card, borderRadius: 18, padding: 18, borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden' }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
         <Pressable onPress={() => onAuthorPress(post.author.id)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
           <SafeImage uri={post.author.avatar} name={post.author.name} style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceLight }} contentFit="cover" />
@@ -314,7 +371,22 @@ function PostCard({
         </View>
       )}
 
-      <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 12 }}>{contentText}</Text>
+      <View style={{ marginBottom: 12 }}>
+        <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22 }}>{displayContent}</Text>
+        {isShowingTranslated && (
+          <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
+        )}
+        <Pressable
+          onPress={handleTranslate}
+          disabled={isTranslating}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start' }}
+        >
+          <Languages size={14} color={isShowingTranslated ? colors.gold : colors.textMuted} />
+          <Text style={{ fontSize: 12, fontWeight: '600' as const, color: isShowingTranslated ? colors.gold : colors.textMuted }}>
+            {isTranslating ? (language === 'ja' ? '翻訳中...' : 'Translating...') : isShowingTranslated ? t('original', language) : t('translate', language)}
+          </Text>
+        </Pressable>
+      </View>
 
       {post.imageUrl && (
         <Pressable onPress={() => onImagePress?.(post.imageUrl!)} style={{ marginBottom: 12 }}>
@@ -1013,7 +1085,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     listContent: { paddingBottom: 20 },
-    filterTabs: { flexDirection: 'row', alignSelf: 'center', backgroundColor: colors.surface, borderRadius: 999, padding: 4, marginBottom: 12, borderWidth: 1, borderColor: colors.cardBorder },
+    filterTabs: { flexDirection: 'row', alignSelf: 'center', backgroundColor: colors.surface, borderRadius: 999, padding: 5, marginBottom: 14, borderWidth: 1, borderColor: colors.cardBorder },
     filterTab: { flex: 1, paddingVertical: 6, paddingHorizontal: 16, borderRadius: 999, alignItems: 'center' as const, justifyContent: 'center' as const },
     filterTabActive: { backgroundColor: colors.gold },
     filterTabText: { fontSize: 13, fontWeight: '600' as const, color: colors.textMuted },

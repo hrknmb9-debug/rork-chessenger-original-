@@ -20,7 +20,7 @@ import {
   Search,
   Map,
   Navigation,
-  SlidersHorizontal,
+  Settings,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '@/constants/colors';
@@ -236,7 +236,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
-              <SlidersHorizontal size={20} color={colors.textPrimary} />
+              <Settings size={22} color={colors.textPrimary} />
             </Pressable>
           </View>
         </View>
@@ -320,19 +320,19 @@ function createStyles(colors: ThemeColors) {
     headerLogo: { fontSize: 24 },
     headerTitle: { fontSize: 22, fontWeight: '800', color: colors.textPrimary, letterSpacing: -0.5 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    headerIconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, alignItems: 'center', justifyContent: 'center' },
+    headerIconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.cardBorder },
     listContent: { paddingBottom: 100 },
     listHeader: { paddingTop: 4, marginBottom: 4 },
-    locationBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 14 },
+    locationBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 16 },
     locationChip: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder },
     locationChipActive: { borderColor: colors.blue + '55', backgroundColor: colors.blueMuted },
     locationText: { fontSize: 12, fontWeight: '500', color: colors.textMuted },
     locationTextActive: { color: colors.blue },
     mapBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.blueMuted, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.blue + '33' },
     onlineSection: { marginHorizontal: 16, marginBottom: 4 },
-    searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 12, height: 40, paddingHorizontal: 16, backgroundColor: colors.inputBg, borderRadius: 20 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 14, height: 44, paddingHorizontal: 16, backgroundColor: colors.inputBg, borderRadius: 22 },
     searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
-    tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, gap: 8 },
+    tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 14, gap: 10 },
     tab: { paddingVertical: 8, paddingHorizontal: 18, borderRadius: 20, backgroundColor: colors.surface },
     tabActive: { backgroundColor: colors.accent },
     tabText: { fontSize: 13, fontWeight: '500', color: colors.textMuted },

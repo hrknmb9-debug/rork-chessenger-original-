@@ -22,7 +22,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { SafeImage } from '@/components/SafeImage';
-import { Send, Image as ImageIcon, Check, CheckCheck, X } from 'lucide-react-native';
+import { Send, Image as ImageIcon, Check, CheckCheck, X, Languages } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { ThemeColors } from '@/constants/colors';
@@ -39,6 +39,7 @@ import {
   decodeMessageContent,
   isLoadableImageUrl,
 } from '@/utils/messageImageUpload';
+import { translateText, getTargetLanguage } from '@/utils/translateText';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -250,9 +251,30 @@ function MessageBubble({
   onImagePress?: (url: string) => void;
   reactions: string[];
 }) {
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
   const { isImage, value } = decodeMessageContent(item.text);
   const imageUrl = isImage ? (value || (item.imageUrl ?? undefined)) : (item.imageUrl ?? undefined);
+  const hasTranslatableText = !isImage && item.text?.trim().length > 0;
   const timeStr = getTimeAgo(item.timestamp, language);
+
+  const handleTranslate = useCallback(async () => {
+    if (isTranslating || !hasTranslatableText) return;
+    if (translatedText) {
+      setTranslatedText(null);
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const result = await translateText(item.text, getTargetLanguage(language), session?.access_token);
+      if ('text' in result) setTranslatedText(result.text);
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [hasTranslatableText, item.text, language, translatedText, isTranslating]);
+
+  const displayText = translatedText ?? item.text;
 
   const reactionGroups = useMemo(() => {
     const map: Record<string, number> = {};
@@ -319,11 +341,28 @@ function MessageBubble({
           ) : (isImage || imageUrl) && imageUrl ? (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
           ) : (
-            <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
-              {item.text}
-            </Text>
+            <>
+              <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>
+                {displayText}
+              </Text>
+              {translatedText && (
+                <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther, { fontSize: 10, opacity: 0.8, marginTop: 2 }]}>
+                  {t('translated_by_ai', language)}
+                </Text>
+              )}
+            </>
           )}
         </Pressable>
+
+        {/* Translate button - for text messages from others */}
+        {hasTranslatableText && !isMe && isLast && (
+          <Pressable onPress={handleTranslate} disabled={isTranslating} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, marginLeft: 4 }}>
+            <Languages size={12} color={colors.textMuted} />
+            <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '500' }}>
+              {isTranslating ? (language === 'ja' ? '翻訳中...' : 'Translating...') : translatedText ? t('original', language) : t('translate', language)}
+            </Text>
+          </Pressable>
+        )}
 
         {/* Meta row: time + read receipt — last message in group only */}
         {isLast && (
