@@ -132,7 +132,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.mapHeader} pointerEvents="box-none">
+      <SafeAreaView style={[styles.mapHeader, { pointerEvents: 'box-none' }]}>
         <View style={[styles.mapHeaderBar, { backgroundColor: colors.card }]}>
           <View style={styles.mapHeaderRow}>
             <BackNavButton onPress={() => router.back()} />

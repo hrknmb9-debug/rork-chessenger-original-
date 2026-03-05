@@ -3,7 +3,7 @@
  * チェスのポーンをアクティブにパルス・スケールで表現
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { View, StyleSheet, Animated, Platform } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 const LOGO_SIZE = 120;
@@ -19,6 +19,8 @@ const PawnPath = () => (
   />
 );
 
+const useNativeDriver = Platform.OS !== 'web';
+
 export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) {
   const scaleAnim = useRef(new Animated.Value(0.6)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -30,13 +32,13 @@ export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) 
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 400,
-        useNativeDriver: true,
+        useNativeDriver,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
         friction: 8,
-        useNativeDriver: true,
+        useNativeDriver,
       }),
     ]).start();
 
@@ -47,12 +49,12 @@ export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) 
           Animated.timing(pulseAnim, {
             toValue: 1.08,
             duration: 800,
-            useNativeDriver: true,
+            useNativeDriver,
           }),
           Animated.timing(pulseAnim, {
             toValue: 0.96,
             duration: 800,
-            useNativeDriver: true,
+            useNativeDriver,
           }),
         ]),
         { iterations: -1 }
@@ -66,7 +68,7 @@ export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) 
       Animated.timing(opacityAnim, {
         toValue: 0,
         duration: 300,
-        useNativeDriver: true,
+        useNativeDriver,
       }).start(() => {
         onComplete?.();
       });
@@ -81,7 +83,7 @@ export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) 
   const scaleInterpolate = Animated.multiply(scaleAnim, pulseAnim);
 
   return (
-    <View style={styles.container} pointerEvents="none">
+    <View style={[styles.container, { pointerEvents: 'none' }]}>
       <Animated.View
         style={[
           styles.logoWrap,

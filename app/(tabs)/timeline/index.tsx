@@ -537,7 +537,7 @@ function PostCard({
 
       {/* イベント投稿の場合: イベントカードをコンテンツより先に表示（詳細を強調） */}
       {post.event && (
-        <View style={{ backgroundColor: colors.greenMuted, borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.green + '33', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }}>
+        <View style={[styles.eventCard, { backgroundColor: colors.greenMuted, borderColor: colors.green + '33' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
             <Text key={`ev-title-${post.id}`} style={{ fontSize: 16, fontWeight: '700' as const, color: colors.textPrimary, flex: 1, textAlign: isRTL(language) ? 'right' : 'left' }}>{displayEventTitle}</Text>
             <Pressable
@@ -1381,6 +1381,15 @@ function createStyles(colors: ThemeColors) {
     templateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
     templateChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder },
     templateText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' as const },
+    eventCard: {
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+      borderWidth: 1,
+      ...(Platform.OS === 'web'
+        ? { boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }
+        : { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 }),
+    },
     eventButton: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.greenMuted, alignSelf: 'flex-start' },
     eventButtonText: { fontSize: 13, fontWeight: '600' as const, color: colors.green },
     composerExpanded: { backgroundColor: colors.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: colors.goldDark },
