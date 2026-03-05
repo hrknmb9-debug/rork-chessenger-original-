@@ -3,6 +3,7 @@
 
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "matches_insert_requester" ON public.matches;
 CREATE POLICY "matches_insert_requester"
 ON public.matches FOR INSERT
 TO authenticated

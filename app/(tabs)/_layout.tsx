@@ -120,7 +120,7 @@ function TabBarItem({ isFocused, onPress, onLongPress, icon, label, badge = 0, c
 // ─── カスタムタブバー ─────────────────────────────────────────────────────────
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { pendingIncoming, language, totalUnreadMessageCount, unreadTimelineNotificationCount } = useChess();
   const insets = useSafeAreaInsets();
 

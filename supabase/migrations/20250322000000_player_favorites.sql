@@ -10,17 +10,20 @@ CREATE TABLE IF NOT EXISTS public.player_favorites (
 ALTER TABLE public.player_favorites ENABLE ROW LEVEL SECURITY;
 
 -- 自分がお気に入り登録・解除できる
+DROP POLICY IF EXISTS "player_favorites_insert_own" ON public.player_favorites;
 CREATE POLICY "player_favorites_insert_own"
   ON public.player_favorites FOR INSERT
   TO authenticated
   WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "player_favorites_delete_own" ON public.player_favorites;
 CREATE POLICY "player_favorites_delete_own"
   ON public.player_favorites FOR DELETE
   TO authenticated
   USING (user_id = auth.uid());
 
 -- 自分のお気に入り一覧を読める
+DROP POLICY IF EXISTS "player_favorites_select_own" ON public.player_favorites;
 CREATE POLICY "player_favorites_select_own"
   ON public.player_favorites FOR SELECT
   TO authenticated
