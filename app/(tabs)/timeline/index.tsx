@@ -301,6 +301,7 @@ function PostCard({
   language: string;
 }) {
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { currentUserId, accessToken, joinEvent, leaveEvent, setTranslationLock } = useChess();
   const [showComments, setShowComments] = useState<boolean>(false);
   const [commentText, setCommentText] = useState<string>('');
