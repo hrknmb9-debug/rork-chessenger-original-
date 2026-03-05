@@ -21,6 +21,7 @@ const SECTIONS = [
   { titleKey: 'privacy_section_5_title', contentKey: 'privacy_section_5' },
   { titleKey: 'privacy_section_6_title', contentKey: 'privacy_section_6' },
   { titleKey: 'privacy_section_7_title', contentKey: 'privacy_section_7' },
+  { titleKey: 'privacy_section_8_title', contentKey: 'privacy_section_8' },
 ];
 
 export default function PrivacyPolicyScreen() {

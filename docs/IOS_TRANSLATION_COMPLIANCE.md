@@ -1,0 +1,41 @@
+# iOS 翻訳機能 コンプライアンス調査メモ
+
+## 調査結果（2025年3月）
+
+### 1. プライバシー開示（対応済み）
+
+- **課題**: 翻訳ボタン押下時にテキストが第三者API（Google Cloud Translation API、MyMemory API）に送信されることをプライバシーポリシーで開示していなかった
+- **対応**: プライバシーポリシーに「7. 翻訳機能について」セクションを追加し、以下を明記:
+  - 翻訳ボタン押下時のみテキストが送信される
+  - 送信先（Google Cloud Translation API、MyMemory API 等）
+  - 翻訳目的のみに使用、学習・他目的利用なし
+
+### 2. App Store Connect での作業
+
+提出時、App Store Connect の「App プライバシー」で次を追加・確認すること:
+
+- **データタイプ**: ユーザーコンテンツ（User Content）またはその他（Other）
+- **使用目的**: 製品機能の提供（Product Features）
+- **第三者共有**: あり（翻訳サービス提供のため）
+- **リンク付け**: なし（トラッキング目的ではない）
+
+### 3. 技術的対応（既に対応済み）
+
+- **ボタン押下のみ翻訳**: 自動翻訳を廃止し、ユーザー操作時のみ実行
+- **制御文字の除去**: 不正ペイロードによるiOSクラッシュ防止
+- **XHR 使用**: React Native iOS の fetch 制限への対応
+- **キャッシュ**: AsyncStorage で同一翻訳の重複API呼び出しを削減
+
+### 4. プライバシーマニフェスト（要確認）
+
+iOS 17 以降、2024年5月から必須のプライバシーマニフェストについて:
+
+- 本アプリは翻訳API呼び出しに **ネットワーク通信** を使用
+- Required Reason API（UserDefaults, ファイルタイムスタンプ等）を直接使用していない場合は、現時点で追加マニフェストは不要な可能性が高い
+- Expo/React Native ビルド時にサードパーティSDKのマニフェストが必要な場合は、各SDKのドキュメントを確認すること
+
+### 5. 参考リンク
+
+- [App Store レビューガイドライン](https://developer.apple.com/app-store/review/guidelines)
+- [App プライバシー詳細](https://developer.apple.com/app-store/app-privacy-details/)
+- [Google Cloud Translation データ使用](https://cloud.google.com/translate/data-usage)
