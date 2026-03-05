@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react-native';
 import QRCodeSVG from 'react-native-qrcode-svg';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { useChess } from '@/providers/ChessProvider';
@@ -76,12 +77,19 @@ export default function ProfileScreen() {
   const router = useRouter();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [showQR, setShowQR] = useState(false);
+  const [scanMode, setScanMode] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const scannedRef = useRef(false);
   const qrModalScale = useRef(new Animated.Value(0.85)).current;
   const qrModalOpacity = useRef(new Animated.Value(0)).current;
 
   const profileDeepLink = `rork-app://player/${profile?.id ?? user?.id ?? ''}`;
 
   const openQR = useCallback(() => {
+    setScanMode(false);
+    setScanResult(null);
+    scannedRef.current = false;
     setShowQR(true);
     Animated.parallel([
       Animated.spring(qrModalScale, { toValue: 1, speed: 18, bounciness: 8, useNativeDriver: true }),
@@ -93,8 +101,55 @@ export default function ProfileScreen() {
     Animated.parallel([
       Animated.spring(qrModalScale, { toValue: 0.85, speed: 20, bounciness: 0, useNativeDriver: true }),
       Animated.timing(qrModalOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
-    ]).start(() => setShowQR(false));
+    ]).start(() => {
+      setShowQR(false);
+      setScanMode(false);
+      setScanResult(null);
+      scannedRef.current = false;
+    });
   }, [qrModalScale, qrModalOpacity]);
+
+  const openScanner = useCallback(async () => {
+    if (!cameraPermission?.granted) {
+      const result = await requestCameraPermission();
+      if (!result.granted) {
+        Alert.alert(
+          language === 'ja' ? 'カメラ許可が必要です' : 'Camera Permission Required',
+          language === 'ja' ? '設定からカメラを許可してください' : 'Please allow camera access in Settings'
+        );
+        return;
+      }
+    }
+    scannedRef.current = false;
+    setScanResult(null);
+    setScanMode(true);
+  }, [cameraPermission, requestCameraPermission, language]);
+
+  const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    setScanResult(data);
+
+    // rork-app://player/{id} 形式を解析
+    const match = data.match(/^rork-app:\/\/player\/([^/?#]+)/);
+    if (match && match[1]) {
+      const playerId = match[1];
+      setScanMode(false);
+      closeQR();
+      setTimeout(() => {
+        router.push(`/player/${playerId}` as any);
+      }, 300);
+    } else {
+      setScanMode(false);
+      Alert.alert(
+        language === 'ja' ? '対応していないQRコードです' : 'Unsupported QR Code',
+        language === 'ja'
+          ? `このQRコードはChessengerのプロフィールではありません\n${data}`
+          : `This QR code is not a Chessenger profile.\n${data}`,
+        [{ text: 'OK', onPress: () => { scannedRef.current = false; setScanMode(false); } }]
+      );
+    }
+  }, [closeQR, router, language]);
 
   const handleShareQR = useCallback(async () => {
     try {
@@ -301,42 +356,80 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
 
-            {/* QR コード */}
-            <View style={styles.qrCodeWrap}>
-              <View style={styles.qrCodeInner}>
-                {profile?.id && (
-                  <QRCodeSVG
-                    value={profileDeepLink}
-                    size={220}
-                    backgroundColor="transparent"
-                    color={colors.textPrimary}
-                    logo={{ uri: resolveAvatarUrl(profile.avatar, profile.name) }}
-                    logoSize={44}
-                    logoBackgroundColor="#fff"
-                    logoBorderRadius={22}
-                    logoMargin={4}
-                  />
-                )}
+            {scanMode ? (
+              /* ─── カメラスキャン画面 ─── */
+              <View style={styles.scannerWrap}>
+                <CameraView
+                  style={styles.scannerCamera}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                  onBarcodeScanned={handleBarCodeScanned}
+                />
+                {/* ファインダー枠 */}
+                <View style={styles.scannerFinder} pointerEvents="none">
+                  <View style={[styles.scannerCorner, styles.scannerCornerTL]} />
+                  <View style={[styles.scannerCorner, styles.scannerCornerTR]} />
+                  <View style={[styles.scannerCorner, styles.scannerCornerBL]} />
+                  <View style={[styles.scannerCorner, styles.scannerCornerBR]} />
+                </View>
+                <Text style={styles.scannerHint}>
+                  {language === 'ja' ? '相手のQRコードに合わせてください' : 'Align with the QR code'}
+                </Text>
+                <Pressable onPress={() => setScanMode(false)} style={styles.scannerCancelBtn}>
+                  <X size={20} color="#fff" />
+                  <Text style={styles.scannerCancelText}>
+                    {language === 'ja' ? 'キャンセル' : 'Cancel'}
+                  </Text>
+                </Pressable>
               </View>
-            </View>
+            ) : (
+              <>
+                {/* QR コード */}
+                <View style={styles.qrCodeWrap}>
+                  <View style={styles.qrCodeInner}>
+                    {profile?.id && (
+                      <QRCodeSVG
+                        value={profileDeepLink}
+                        size={200}
+                        backgroundColor="transparent"
+                        color={colors.textPrimary}
+                        logo={{ uri: resolveAvatarUrl(profile.avatar, profile.name) }}
+                        logoSize={40}
+                        logoBackgroundColor="#fff"
+                        logoBorderRadius={20}
+                        logoMargin={4}
+                      />
+                    )}
+                  </View>
+                </View>
 
-            {/* ユーザー名 */}
-            <Text style={styles.qrName}>{profile?.name ?? user?.name}</Text>
-            <Text style={styles.qrSub} numberOfLines={1}>{profileDeepLink}</Text>
+                {/* ユーザー名 */}
+                <Text style={styles.qrName}>{profile?.name ?? user?.name}</Text>
+                <Text style={styles.qrSub} numberOfLines={1}>{profileDeepLink}</Text>
 
-            {/* シェアボタン */}
-            <Pressable onPress={handleShareQR} style={styles.qrShareBtn}>
-              <Share2 size={18} color="#fff" />
-              <Text style={styles.qrShareText}>
-                {language === 'ja' ? 'プロフィールをシェア' : 'Share Profile'}
-              </Text>
-            </Pressable>
+                {/* スキャンボタン */}
+                <Pressable onPress={openScanner} style={[styles.qrShareBtn, { backgroundColor: colors.green, marginBottom: 10 }]}>
+                  <QrCode size={18} color="#fff" />
+                  <Text style={styles.qrShareText}>
+                    {language === 'ja' ? '相手のQRをスキャン' : 'Scan a QR Code'}
+                  </Text>
+                </Pressable>
 
-            <Text style={styles.qrHint}>
-              {language === 'ja'
-                ? 'QRコードをカメラで読み取るとプロフィールに飛べます'
-                : 'Scan with camera to open this profile'}
-            </Text>
+                {/* シェアボタン */}
+                <Pressable onPress={handleShareQR} style={styles.qrShareBtn}>
+                  <Share2 size={18} color="#fff" />
+                  <Text style={styles.qrShareText}>
+                    {language === 'ja' ? 'プロフィールをシェア' : 'Share Profile'}
+                  </Text>
+                </Pressable>
+
+                <Text style={styles.qrHint}>
+                  {language === 'ja'
+                    ? 'アプリ内の「スキャン」でQRを読み取れます'
+                    : 'Use "Scan" inside the app to read QR codes'}
+                </Text>
+              </>
+            )}
           </Animated.View>
         </Pressable>
       </Modal>
@@ -842,6 +935,66 @@ function createStyles(colors: any) {
       color: colors.textMuted,
       textAlign: 'center',
       lineHeight: 18,
+    },
+
+    /* スキャナー */
+    scannerWrap: {
+      width: '100%',
+      height: 280,
+      borderRadius: 20,
+      overflow: 'hidden',
+      position: 'relative',
+      backgroundColor: '#000',
+    },
+    scannerCamera: {
+      flex: 1,
+    },
+    scannerFinder: {
+      position: 'absolute',
+      inset: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scannerCorner: {
+      position: 'absolute',
+      width: 28,
+      height: 28,
+      borderColor: '#22C55E',
+      borderWidth: 3,
+    },
+    scannerCornerTL: { top: 40, left: 40, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 6 },
+    scannerCornerTR: { top: 40, right: 40, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 6 },
+    scannerCornerBL: { bottom: 60, left: 40, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 6 },
+    scannerCornerBR: { bottom: 60, right: 40, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 6 },
+    scannerHint: {
+      position: 'absolute',
+      bottom: 32,
+      left: 0,
+      right: 0,
+      textAlign: 'center',
+      color: '#fff',
+      fontSize: 13,
+      fontWeight: '500',
+      textShadowColor: 'rgba(0,0,0,0.6)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    scannerCancelBtn: {
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+    },
+    scannerCancelText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '600',
     },
   });
 }

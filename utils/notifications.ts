@@ -27,12 +27,14 @@ export function setupNotificationHandler(): void {
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldPlaySound: true,
+        shouldPlaySound: true,   // フォアグラウンド時も通知音を鳴らす
         shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
+        // iOS 14+: iosDisplayInForeground は shouldShowBanner で制御
       }),
     });
+    console.log('Notifications: handler set (shouldPlaySound=true)');
   } catch (e) {
     console.log('Notifications: setNotificationHandler failed', e);
   }
@@ -52,11 +54,14 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   try {
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
+        name: 'Chessenger 通知',
         importance: Notifications.AndroidImportance.MAX,
         enableVibrate: true,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#8B5CF6',
+        lightColor: '#7C3AED',
+        sound: 'default',
+        enableLights: true,
+        showBadge: true,
       });
     }
 
@@ -64,7 +69,18 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     let finalStatus = existingStatus;
 
     if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
+      // iOS: サウンド・バッジ・アラートを明示的に要求
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowCriticalAlerts: false,
+          provideAppNotificationSettings: false,
+          allowProvisional: false,
+          allowAnnouncements: false,
+        },
+      });
       finalStatus = status;
     }
 

@@ -19,7 +19,7 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "プロフィール写真やタイムライン投稿に使用します",
         "NSPhotoLibraryAddUsageDescription": "写真を保存するために使用します",
-        "NSCameraUsageDescription": "プロフィール写真やタイムライン投稿の撮影に使用します",
+        "NSCameraUsageDescription": "プロフィール写真・タイムライン投稿の撮影、およびQRコードスキャンに使用します",
         "NSLocationWhenInUseUsageDescription": "近くのチェス対局相手を探すために位置情報を使用します",
         "UIBackgroundModes": ["remote-notification"]
       },
@@ -60,7 +60,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": true

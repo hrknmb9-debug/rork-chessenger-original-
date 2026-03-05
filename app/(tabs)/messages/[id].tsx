@@ -13,7 +13,9 @@ import {
   Alert,
   TouchableOpacity,
   InteractionManager,
+  Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { SafeImage } from '@/components/SafeImage';
@@ -448,11 +450,32 @@ function MessageBubble({
 
 export default function ChatScreen() {
   const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { language, currentUserId, fetchPlayerProfile, refreshUnreadMessageCounts, setTranslationLock } = useChess();
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // フローティングタブバー高さ: 約68px + safe area bottom
+  const TAB_BAR_H = 68 + Math.max(insets.bottom, 8);
+
+  const styles = useMemo(
+    () => createStyles(colors, keyboardVisible, TAB_BAR_H),
+    [colors, keyboardVisible, TAB_BAR_H]
+  );
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -788,7 +811,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
         <FlatList
           ref={flatListRef}
@@ -893,7 +916,7 @@ export default function ChatScreen() {
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 
-function createStyles(colors: ThemeColors) {
+function createStyles(colors: ThemeColors, keyboardVisible: boolean = false, tabBarH: number = 100) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -1082,7 +1105,8 @@ function createStyles(colors: ThemeColors) {
     inputBarWrap: {
       paddingHorizontal: 16,
       paddingTop: 10,
-      paddingBottom: Platform.OS === 'ios' ? 30 : 14,
+      // キーボード非表示時はフローティングタブバー分の余白を確保
+      paddingBottom: keyboardVisible ? (Platform.OS === 'ios' ? 8 : 6) : tabBarH,
       backgroundColor: colors.background,
       ...Platform.select({
         ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -1 }, shadowOpacity: 0.04, shadowRadius: 6 },
