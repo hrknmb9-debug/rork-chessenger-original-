@@ -160,11 +160,17 @@ export async function uploadTimelineImage(
   userId: string,
   base64FromPicker?: string
 ): Promise<MessageImageUploadResult> {
+  // #region agent log
+  fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:start',message:'upload start',data:{uriSlice:localUri?.slice(0,50),hasBase64:!!base64FromPicker,base64Len:base64FromPicker?.length??0,userId},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
+  // #endregion
   console.log(LOG_TAG, '[Timeline] upload start, uri=', localUri?.slice(0, 40), 'hasBase64=', !!base64FromPicker);
 
   const arrayBuffer = await (async (): Promise<ArrayBuffer | null> => {
     if (base64FromPicker?.length) {
       const buf = base64ToArrayBuffer(base64FromPicker);
+      // #region agent log
+      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:b64decoded',message:'base64 decoded',data:{byteLength:buf.byteLength},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
+      // #endregion
       console.log(LOG_TAG, '[Timeline] base64 decoded, byteLength=', buf.byteLength);
       return buf;
     }
@@ -177,6 +183,9 @@ export async function uploadTimelineImage(
   })();
 
   if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+    // #region agent log
+    if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:noData',message:'arrayBuffer empty or null',data:{hasBuffer:!!arrayBuffer,byteLength:arrayBuffer?.byteLength,hasBase64:!!base64FromPicker},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
+    // #endregion
     console.warn(LOG_TAG, '[Timeline] no image data: arrayBuffer=', !!arrayBuffer, 'byteLength=', arrayBuffer?.byteLength);
     return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
   }
@@ -189,7 +198,12 @@ export async function uploadTimelineImage(
     const { error: uploadError } = await supabase.storage
       .from(MESSAGE_IMAGES_BUCKET)
       .upload(filePath, arrayBuffer, { cacheControl: '31536000', upsert: false, contentType });
-    if (uploadError) return { error: `アップロードに失敗しました: ${uploadError.message}` };
+    if (uploadError) {
+      // #region agent log
+      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:storageErr',message:'storage upload failed',data:{message:uploadError.message,name:uploadError.name},timestamp:Date.now(),hypothesisId:'H-IMG3'})}).catch(()=>{});
+      // #endregion
+      return { error: `アップロードに失敗しました: ${uploadError.message}` };
+    }
     const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
     const publicUrl = (data?.publicUrl ?? '').trim();
     if (!publicUrl) return { error: '公開URLの取得に失敗しました' };

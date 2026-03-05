@@ -223,6 +223,9 @@ export async function notifyTimelineComment(
   isReply: boolean = false
 ): Promise<void> {
   const token = await getOpponentPushToken(postOwnerId);
+  // #region agent log
+  fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'notifications.ts:notifyTimelineComment',message:'token fetch result',data:{postOwnerId,hasToken:!!token,tokenPrefix:token?.slice(0,20)??null},timestamp:Date.now(),hypothesisId:'H-F'})}).catch(()=>{});
+  // #endregion
   if (token) {
     const title = isReply
       ? 'コメントへの返信 / Reply'
