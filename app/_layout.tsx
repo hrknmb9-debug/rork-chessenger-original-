@@ -7,6 +7,7 @@ import { LogBox, Platform, View, StatusBar } from "react-native";
 LogBox.ignoreLogs([
   "[SafeImage] onError",
   "Image data is nil",
+  "useNativeDriver", // web では RCTAnimation 未対応のため警告を抑制
 ]);
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LocationProvider } from "@/providers/LocationProvider";

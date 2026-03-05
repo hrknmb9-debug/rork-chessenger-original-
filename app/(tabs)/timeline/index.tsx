@@ -313,13 +313,14 @@ function PostCard({
   const isLiked = post.likes.includes(userId);
 
   const handleLike = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onLike(post.id);
+    if (Platform.OS === 'web') return;
     const useNative = Platform.OS !== 'web';
     Animated.sequence([
       Animated.spring(heartScale, { toValue: 1.3, useNativeDriver: useNative, speed: 50 }),
       Animated.spring(heartScale, { toValue: 1, useNativeDriver: useNative, speed: 50 }),
     ]).start();
-    onLike(post.id);
   }, [post.id, onLike, heartScale]);
 
   const handleSubmitComment = useCallback(() => {
@@ -615,30 +616,33 @@ function PostCard({
         </View>
       )}
 
-      <View style={{ marginBottom: 12 }}>
-        <View key={contentTranslationState.renderKey ?? `post-${post.id}`}>
-          <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
-            {contentToRender}
-          </Text>
-          {contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== (contentText ?? '').trim() && (
-            <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
-          )}
+      {/* イベント投稿はイベント記載のみ表示、通常投稿は本文を表示 */}
+      {post.type !== 'event' && (
+        <View style={{ marginBottom: 12 }}>
+          <View key={contentTranslationState.renderKey ?? `post-${post.id}`}>
+            <Text style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, textAlign: isRTL(language) ? 'right' : 'left' }}>
+              {contentToRender}
+            </Text>
+            {contentTranslationState.localTranslatedContent != null && contentTranslationState.localTranslatedContent.trim() !== (contentText ?? '').trim() && (
+              <Text style={{ fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }}>{t('translated_by_ai', language)}</Text>
+            )}
+          </View>
+          <Pressable
+            onPress={handleTranslate}
+            disabled={contentTranslationState.loading}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: contentTranslationState.loading ? colors.surface : 'transparent' }}
+          >
+            {contentTranslationState.loading ? (
+              <ActivityIndicator size="small" color={colors.gold} />
+            ) : (
+              <Languages size={14} color={contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted} />
+            )}
+            <Text style={{ fontSize: 12, fontWeight: '600' as const, color: contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted }}>
+              {contentTranslationState.loading ? t('translating', language) : contentTranslationState.localTranslatedContent ? t('original', language) : t('translate', language)}
+            </Text>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={handleTranslate}
-          disabled={contentTranslationState.loading}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, backgroundColor: contentTranslationState.loading ? colors.surface : 'transparent' }}
-        >
-          {contentTranslationState.loading ? (
-            <ActivityIndicator size="small" color={colors.gold} />
-          ) : (
-            <Languages size={14} color={contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted} />
-          )}
-          <Text style={{ fontSize: 12, fontWeight: '600' as const, color: contentTranslationState.localTranslatedContent ? colors.gold : colors.textMuted }}>
-            {contentTranslationState.loading ? t('translating', language) : contentTranslationState.localTranslatedContent ? t('original', language) : t('translate', language)}
-          </Text>
-        </Pressable>
-      </View>
+      )}
 
       {post.imageUrl && (
         <MemoizedPostImage
@@ -1096,9 +1100,9 @@ export default function TimelineScreen() {
         ListHeaderComponent={ListHeader}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={6}
-        maxToRenderPerBatch={6}
-        windowSize={8}
+        initialNumToRender={Platform.OS === 'web' ? 4 : 6}
+        maxToRenderPerBatch={Platform.OS === 'web' ? 4 : 6}
+        windowSize={Platform.OS === 'web' ? 5 : 8}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.gold} colors={[colors.gold]} />
         }
