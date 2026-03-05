@@ -1984,7 +1984,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
   /** タイムライン通知画面表示時のみ呼ぶ。タイムライン関連タイプのみ既読にし、メッセージ通知は残す */
   const markTimelineNotificationsRead = useCallback(async () => {
-    const types = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
+    const types = ['post_like', 'post_comment', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
     setNotifications(prev =>
       prev.map(n => (types.includes(n.type as typeof types[number]) ? { ...n, read: true } : n))
     );
@@ -2033,7 +2033,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId]);
 
-  const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
+  const TIMELINE_NOTIFICATION_TYPES = ['post_like', 'post_comment', 'post_reply', 'event_join', 'event_full', 'event_deadline_passed'] as const;
 
   const unreadNotificationCount = useMemo(
     () => notifications.filter(n => !n.read).length,
