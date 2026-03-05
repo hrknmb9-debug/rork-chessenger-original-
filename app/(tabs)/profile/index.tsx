@@ -15,7 +15,6 @@ import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
   Settings,
-  Share,
   Trophy,
   Swords,
   Calendar,
@@ -225,8 +224,8 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Pressable style={styles.headerBtn}>
-            <Share size={22} color={colors.textPrimary} />
+          <Pressable onPress={() => router.push('/profile/favorites' as any)} style={styles.headerBtn}>
+            <Star size={22} color={colors.accent} />
           </Pressable>
           <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerBtn}>
             <Settings size={22} color={colors.textPrimary} />
@@ -397,20 +396,13 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Edit Profile + Favorites */}
+        {/* Edit Profile */}
         <View style={styles.actionSection}>
           <Pressable
             style={styles.editBtn}
             onPress={() => router.push('/edit-profile' as any)}
           >
             <Text style={styles.editBtnText}>{t('edit_profile', language)}</Text>
-          </Pressable>
-          <Pressable
-            style={styles.favoritesBtn}
-            onPress={() => router.push('/profile/favorites' as any)}
-          >
-            <Star size={18} color={colors.accent} />
-            <Text style={styles.favoritesBtnText}>{t('favorites_tab', language)}</Text>
           </Pressable>
         </View>
 
