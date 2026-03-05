@@ -154,23 +154,22 @@ export async function uploadMessageImage(
   }
 }
 
-/** タイムライン投稿用画像アップロード（message-images バケットの userId/timeline/ に保存） */
+/** タイムライン投稿用画像アップロード（Supabase Storage REST API を fetch で直接呼び出す）
+ *
+ * Supabase JS クライアントの .upload() は React Native で ArrayBuffer を正しく
+ * 送信できない場合があるため、REST API に直接 fetch することで確実に動作させる。
+ */
 export async function uploadTimelineImage(
   localUri: string,
   userId: string,
   base64FromPicker?: string
 ): Promise<MessageImageUploadResult> {
-  // #region agent log
-  fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:start',message:'upload start',data:{uriSlice:localUri?.slice(0,50),hasBase64:!!base64FromPicker,base64Len:base64FromPicker?.length??0,userId},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
-  // #endregion
   console.log(LOG_TAG, '[Timeline] upload start, uri=', localUri?.slice(0, 40), 'hasBase64=', !!base64FromPicker);
 
+  // 画像バイナリを取得
   const arrayBuffer = await (async (): Promise<ArrayBuffer | null> => {
     if (base64FromPicker?.length) {
       const buf = base64ToArrayBuffer(base64FromPicker);
-      // #region agent log
-      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:b64decoded',message:'base64 decoded',data:{byteLength:buf.byteLength},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
-      // #endregion
       console.log(LOG_TAG, '[Timeline] base64 decoded, byteLength=', buf.byteLength);
       return buf;
     }
@@ -183,9 +182,6 @@ export async function uploadTimelineImage(
   })();
 
   if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    // #region agent log
-    if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:noData',message:'arrayBuffer empty or null',data:{hasBuffer:!!arrayBuffer,byteLength:arrayBuffer?.byteLength,hasBase64:!!base64FromPicker},timestamp:Date.now(),hypothesisId:'H-IMG2'})}).catch(()=>{});
-    // #endregion
     console.warn(LOG_TAG, '[Timeline] no image data: arrayBuffer=', !!arrayBuffer, 'byteLength=', arrayBuffer?.byteLength);
     return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
   }
@@ -195,21 +191,45 @@ export async function uploadTimelineImage(
   const contentType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
 
   try {
-    const { error: uploadError } = await supabase.storage
-      .from(MESSAGE_IMAGES_BUCKET)
-      .upload(filePath, arrayBuffer, { cacheControl: '31536000', upsert: false, contentType });
-    if (uploadError) {
-      // #region agent log
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'messageImageUpload.ts:uploadTimelineImage:storageErr',message:'storage upload failed',data:{message:uploadError.message,name:uploadError.name},timestamp:Date.now(),hypothesisId:'H-IMG3'})}).catch(()=>{});
-      // #endregion
-      return { error: `アップロードに失敗しました: ${uploadError.message}` };
+    // 認証トークン取得
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    if (!token) {
+      console.warn(LOG_TAG, '[Timeline] no auth token');
+      return { error: '認証セッションが取得できませんでした。再ログインしてください。' };
     }
+
+    // Supabase Storage REST API へ直接 fetch（JS クライアント経由より React Native で安定）
+    const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${MESSAGE_IMAGES_BUCKET}/${filePath}`;
+
+    console.log(LOG_TAG, '[Timeline] uploading to REST API, byteLength=', arrayBuffer.byteLength, 'contentType=', contentType);
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': contentType,
+        'x-upsert': 'false',
+      },
+      body: arrayBuffer,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.warn(LOG_TAG, '[Timeline] storage upload failed', response.status, errText);
+      return { error: `アップロードに失敗しました (${response.status}): ${errText}` };
+    }
+
     const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
     const publicUrl = (data?.publicUrl ?? '').trim();
     if (!publicUrl) return { error: '公開URLの取得に失敗しました' };
+
+    console.log(LOG_TAG, '[Timeline] upload success, publicUrl=', publicUrl.slice(0, 60));
     return { url: publicUrl + '?t=' + Date.now() };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.warn(LOG_TAG, '[Timeline] upload exception:', msg);
     return { error: `アップロードに失敗しました: ${msg}` };
   }
 }

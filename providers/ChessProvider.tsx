@@ -1787,11 +1787,8 @@ export const [ChessProvider, useChess] = createContextHook(() => {
   }, [currentUserId, timelinePosts, profile?.name]);
 
   const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:entry',message:'addComment entry',data:{postId,parentId:parentId??null,postIdPrefix:postId?.slice(0,8)},timestamp:Date.now(),hypothesisId:'H-NOTIF1'})}).catch(()=>{});
-    // #endregion
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    const userId = authUser?.id ?? currentUserId ?? 'me';
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id ?? currentUserId ?? 'me';
 
     const newComment: TimelineComment = {
       id: `c${Date.now()}`,
@@ -1817,40 +1814,28 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       })
     );
 
-    // #region agent log
-    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:start',message:'addComment start',data:{postId,userId,hasParentId:!!parentId,contentLen:content.length},timestamp:Date.now(),hypothesisId:'H-CMT'})}).catch(()=>{});
-    // #endregion
     try {
-      const { error: cmtErr } = await supabase.from('comments').insert({
+      await supabase.from('comments').insert({
         post_id: postId,
         user_id: userId,
         content,
         parent_id: parentId ?? null,
       });
-      // #region agent log
-      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:insert',message:'comment insert result',data:{error:cmtErr?.message??null},timestamp:Date.now(),hypothesisId:'H-H'})}).catch(()=>{});
-      // #endregion
-      console.log('Comment synced to Supabase', cmtErr ? cmtErr.message : 'ok');
+      console.log('Comment synced to Supabase');
 
       const actorName = profile?.name ?? 'Someone';
-      const { data: postRow, error: postRowErr } = await supabase.from('posts').select('user_id').eq('id', postId).single();
+      const { data: postRow } = await supabase.from('posts').select('user_id').eq('id', postId).single();
       const postOwnerId = postRow?.user_id;
-      // #region agent log
-      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:postOwner',message:'post owner fetch',data:{postId,postOwnerId,postRowErr:postRowErr?.message??null,sameUser:postOwnerId===userId},timestamp:Date.now(),hypothesisId:'H-E'})}).catch(()=>{});
-      // #endregion
 
       if (parentId) {
         // 返信: 投稿者 + 親コメント投稿者に通知
         if (postOwnerId && postOwnerId !== userId) {
-          const {error:notifErr1} = await supabase.from('notifications').insert({
+          await supabase.from('notifications').insert({
             user_id: postOwnerId,
             type: 'post_reply',
             content: `${actorName}が返信しました`,
             related_id: postId,
           });
-          // #region agent log
-          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:notif_reply_owner',message:'reply notif to post owner',data:{postOwnerId,error:notifErr1?.message??null},timestamp:Date.now(),hypothesisId:'H-G'})}).catch(()=>{});
-          // #endregion
           notifyTimelineComment(postOwnerId, actorName, true).catch(() => {});
         }
         const { data: parentRow } = await supabase.from('comments').select('user_id').eq('id', parentId).single();
@@ -1867,26 +1852,16 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       } else {
         // 直コメント: 投稿者に通知（自分以外）
         if (postOwnerId && postOwnerId !== userId) {
-          const {error:notifErr2} = await supabase.from('notifications').insert({
+          await supabase.from('notifications').insert({
             user_id: postOwnerId,
             type: 'post_comment',
             content: `${actorName}がコメントしました`,
             related_id: postId,
           });
-          // #region agent log
-          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:notif_comment',message:'direct comment notif insert',data:{postOwnerId,error:notifErr2?.message??null},timestamp:Date.now(),hypothesisId:'H-G'})}).catch(()=>{});
-          // #endregion
           notifyTimelineComment(postOwnerId, actorName, false).catch(() => {});
-        } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:notif_skip',message:'notification skipped (same user or no owner)',data:{postOwnerId,userId,sameUser:postOwnerId===userId},timestamp:Date.now(),hypothesisId:'H-E'})}).catch(()=>{});
-          // #endregion
         }
       }
     } catch (e) {
-      // #region agent log
-      fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'ChessProvider.tsx:addComment:catch',message:'addComment catch error',data:{error:String(e)},timestamp:Date.now(),hypothesisId:'H-H'})}).catch(()=>{});
-      // #endregion
       console.log('Comment sync failed', e);
     }
 

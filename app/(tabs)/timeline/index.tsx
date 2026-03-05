@@ -844,16 +844,15 @@ export default function TimelineScreen() {
   const handleNewPost = useCallback(async () => {
     const hasText = newPostText.trim().length > 0;
     const hasImage = !!postImageUrl;
-    // #region agent log
-    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'timeline/index.tsx:handleNewPost:entry',message:'handleNewPost entry',data:{hasText,hasImage,postImageUrlPrefix:postImageUrl?.slice(0,50),postImageBase64Len:postImageBase64?.length??0},timestamp:Date.now(),hypothesisId:'H-IMG1'})}).catch(()=>{});
-    // #endregion
     if (!hasText && !hasImage) return;
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     let imageUrl: string | undefined = postImageUrl ?? undefined;
 
     if (imageUrl && !imageUrl.startsWith('http')) {
-      const { data: { user } } = await supabase.auth.getUser();
+      // getSession() はローカルキャッシュから取得するため getUser() より確実
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (user) {
         const result = await uploadTimelineImage(
           imageUrl,
@@ -862,26 +861,21 @@ export default function TimelineScreen() {
         );
         if ('url' in result) {
           imageUrl = result.url;
-          // #region agent log
-          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'timeline/index.tsx:handleNewPost:uploadOk',message:'upload success',data:{imageUrlLen:imageUrl?.length},timestamp:Date.now(),hypothesisId:'H-IMG3'})}).catch(()=>{});
-          // #endregion
         } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'timeline/index.tsx:handleNewPost:uploadErr',message:'upload failed',data:{error:(result as {error:string}).error},timestamp:Date.now(),hypothesisId:'H-IMG2,H-IMG3'})}).catch(()=>{});
-          // #endregion
           Alert.alert(language === 'ja' ? '画像エラー' : 'Image Error', result.error);
           imageUrl = undefined;
           if (!hasText) return;
         }
       } else {
+        Alert.alert(
+          language === 'ja' ? '認証エラー' : 'Auth Error',
+          language === 'ja' ? '再ログインしてください' : 'Please log in again'
+        );
         imageUrl = undefined;
         if (!hasText) return;
       }
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7660/ingest/5c343937-8fec-4649-92d9-59dec881973f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bff004'},body:JSON.stringify({sessionId:'bff004',location:'timeline/index.tsx:handleNewPost:beforeAdd',message:'before addTimelinePost',data:{imageUrl:!!imageUrl,imageUrlLen:imageUrl?.length},timestamp:Date.now(),hypothesisId:'H-IMG4'})}).catch(()=>{});
-    // #endregion
     addTimelinePost(newPostText.trim(), 'general', imageUrl);
     setNewPostText('');
     setPostImageUrl(null);
