@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   Pressable,
   SafeAreaView,
   ActivityIndicator,
+  Alert,
+  InteractionManager,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -23,11 +25,13 @@ import {
   Flag,
   Star,
   Users,
+  Languages,
 } from 'lucide-react-native';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { t, getCountryFlag, getCountryName } from '@/utils/translations';
+import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
 import { PlayStyle } from '@/types';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
 import { SafeImage } from '@/components/SafeImage';
@@ -58,14 +62,58 @@ interface HostedEventWithParticipants {
   participants: { id: string; name: string; avatar: string | null }[];
 }
 
+const PROFILE_BIO_ITEM_ID = 'profile-bio';
+
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const { user, logout } = useAuth();
-  const { profile, language } = useChess();
+  const { profile, language, accessToken } = useChess();
   const router = useRouter();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [hostedEvents, setHostedEvents] = useState<HostedEventWithParticipants[]>([]);
   const [loadingHosted, setLoadingHosted] = useState(false);
+  const [bioTranslationState, setBioTranslationState] = useState<{ loading: boolean; localTranslatedContent: string | null }>({ loading: false, localTranslatedContent: null });
+
+  const bioText = profile?.bio || user?.bio || '';
+  const bioToShow = bioTranslationState.localTranslatedContent ?? bioText;
+  const hasBio = !!bioText?.trim();
+
+  useEffect(() => {
+    const sub = onTranslationComplete((e) => {
+      if (e.itemId !== PROFILE_BIO_ITEM_ID) return;
+      const text = decodeForDisplay(e.text);
+      if (!text?.trim()) return;
+      InteractionManager.runAfterInteractions(() => {
+        setBioTranslationState({ loading: false, localTranslatedContent: text });
+      });
+    });
+    return () => sub.remove();
+  }, []);
+
+  const handleTranslateBio = useCallback(async () => {
+    if (!hasBio || bioTranslationState.loading) return;
+    if (bioTranslationState.localTranslatedContent) {
+      setBioTranslationState({ loading: false, localTranslatedContent: null });
+      return;
+    }
+    setBioTranslationState((prev) => ({ ...prev, loading: true }));
+    let didSet = false;
+    try {
+      const targetLang = getTargetLanguage(language);
+      const result = await translateText(bioText, targetLang, accessToken ?? undefined, { itemId: PROFILE_BIO_ITEM_ID });
+      if ('text' in result) {
+        const decoded = decodeForDisplay(result.text);
+        if (decoded.trim()) {
+          setBioTranslationState({ loading: false, localTranslatedContent: decoded });
+          didSet = true;
+        }
+      } else {
+        Alert.alert(t('error', language), t('translation_failed', language));
+      }
+    } finally {
+      if (!didSet) setBioTranslationState((prev) => ({ ...prev, loading: false }));
+    }
+  }, [hasBio, bioText, language, bioTranslationState.loading, bioTranslationState.localTranslatedContent, accessToken]);
 
   const loadHostedEvents = useCallback(async () => {
     if (!user?.id || !profile?.id) return;
@@ -216,11 +264,31 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {/* Bio */}
+          {/* Bio + 翻訳 */}
+          {hasBio && (
+            <Pressable
+              onPress={handleTranslateBio}
+              disabled={bioTranslationState.loading}
+              style={({ pressed }) => [
+                styles.bioTranslateRow,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Languages size={14} color={bioTranslationState.localTranslatedContent ? colors.gold : colors.textMuted} />
+              <Text style={[styles.bioTranslateText, bioTranslationState.localTranslatedContent && { color: colors.gold }]}>
+                {bioTranslationState.loading ? t('translating', language) : bioTranslationState.localTranslatedContent ? t('original', language) : t('translate', language)}
+              </Text>
+            </Pressable>
+          )}
           <View style={styles.bioContainer}>
             <Text style={styles.bioText}>
-              {profile.bio || user.bio || 'チェス歴5年。平日の夜にオンラインで対局できる方を探しています！'}
+              {bioToShow || 'チェス歴5年。平日の夜にオンラインで対局できる方を探しています！'}
             </Text>
+            {bioTranslationState.localTranslatedContent != null && (
+              <Text style={[styles.bioText, { fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }]}>
+                {t('translated_by_ai', language)}
+              </Text>
+            )}
           </View>
         </View>
 
@@ -425,6 +493,20 @@ function createStyles(colors: any) {
       borderColor: colors.cardBorder,
     },
     metaChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+
+    /* Bio 翻訳 */
+    bioTranslateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      alignSelf: 'center',
+      marginBottom: 8,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      backgroundColor: 'transparent',
+    },
+    bioTranslateText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
 
     /* Bio */
     bioContainer: {

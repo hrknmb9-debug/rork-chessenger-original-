@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Animated,
   Platform,
   Alert,
+  InteractionManager,
 } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
@@ -40,6 +41,7 @@ import {
   formatRating,
 } from '@/utils/helpers';
 import { t, getCountryFlag, getCountryName } from '@/utils/translations';
+import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
 import { BackNavButton } from '@/components/BackNavButton';
 import { PlayStyle } from '@/types';
 
@@ -64,13 +66,13 @@ export default function PlayerDetailScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { players, sendMatchRequest, language, blockUser, unblockUser, isUserBlocked, currentUserId } = useChess();
+  const { players, sendMatchRequest, language, blockUser, unblockUser, isUserBlocked, currentUserId, accessToken } = useChess();
   const { userLocation } = useLocation();
   const router = useRouter();
   const [selectedTime, setSelectedTime] = useState('15+10');
   const [showTimeSelector, setShowTimeSelector] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
-  const [showTranslatedBio, setShowTranslatedBio] = useState(false);
+  const [bioApiState, setBioApiState] = useState<{ loading: boolean; translated: string | null }>({ loading: false, translated: null });
 
   const buttonAnim = useRef(new Animated.Value(1)).current;
   const sentAnim = useRef(new Animated.Value(0)).current;
@@ -109,10 +111,46 @@ export default function PlayerDetailScreen() {
     setShowTimeSelector(false);
   }, []);
 
-  const handleToggleBioTranslation = useCallback(() => {
+  const PLAYER_BIO_ITEM_ID = `player-bio-${id}`;
+  const playerBioText = player?.bio?.trim() ?? '';
+
+  useEffect(() => {
+    const sub = onTranslationComplete((e) => {
+      if (e.itemId !== PLAYER_BIO_ITEM_ID) return;
+      const text = decodeForDisplay(e.text);
+      if (!text?.trim()) return;
+      InteractionManager.runAfterInteractions(() => {
+        setBioApiState({ loading: false, translated: text });
+      });
+    });
+    return () => sub.remove();
+  }, [id]);
+
+  const handleTranslateBio = useCallback(async () => {
+    if (!playerBioText || bioApiState.loading) return;
+    if (bioApiState.translated != null) {
+      setBioApiState({ loading: false, translated: null });
+      return;
+    }
     if (Platform.OS !== 'web') Haptics.selectionAsync();
-    setShowTranslatedBio(prev => !prev);
-  }, []);
+    setBioApiState((prev) => ({ ...prev, loading: true }));
+    let didSet = false;
+    try {
+      const targetLang = getTargetLanguage(language);
+      const result = await translateText(player.bio!, targetLang, accessToken ?? undefined, { itemId: PLAYER_BIO_ITEM_ID });
+      if ('text' in result) {
+        const decoded = decodeForDisplay(result.text);
+        if (decoded.trim()) {
+          setBioApiState({ loading: false, translated: decoded });
+          didSet = true;
+        }
+      } else {
+        Alert.alert(t('error', language), t('translation_failed', language));
+      }
+    } finally {
+      if (!didSet) setBioApiState((prev) => ({ ...prev, loading: false }));
+    }
+  }, [player?.bio, playerBioText, language, bioApiState.loading, bioApiState.translated, accessToken, id]);
 
   const handleSendMessage = useCallback(() => {
     if (!player || !id || !currentUserId) return;
@@ -153,7 +191,7 @@ export default function PlayerDetailScreen() {
     );
   }
 
-  const bioText = showTranslatedBio && player.bioEn ? player.bioEn : player.bio;
+  const bioText = bioApiState.translated ?? player.bio;
   const countryDisplay = player.country
     ? `${getCountryFlag(player.country)} ${getCountryName(player.country, language)}`
     : null;
@@ -207,21 +245,27 @@ export default function PlayerDetailScreen() {
             )}
           </View>
 
-          {player.bioEn ? (
+          {playerBioText ? (
             <View style={styles.bioTranslateRow}>
               <Pressable
-                onPress={handleToggleBioTranslation}
-                style={[styles.bioTranslateBtn, showTranslatedBio ? styles.bioTranslateBtnActive : null]}
+                onPress={handleTranslateBio}
+                disabled={bioApiState.loading}
+                style={[styles.bioTranslateBtn, bioApiState.translated ? styles.bioTranslateBtnActive : null]}
               >
-                <Languages size={13} color={showTranslatedBio ? colors.gold : colors.textMuted} />
-                <Text style={[styles.bioTranslateText, showTranslatedBio ? styles.bioTranslateTextActive : null]}>
-                  {showTranslatedBio ? t('original', language) : t('translate', language)}
+                <Languages size={13} color={bioApiState.translated ? colors.gold : colors.textMuted} />
+                <Text style={[styles.bioTranslateText, bioApiState.translated ? styles.bioTranslateTextActive : null]}>
+                  {bioApiState.loading ? t('translating', language) : bioApiState.translated ? t('original', language) : t('translate', language)}
                 </Text>
               </Pressable>
             </View>
           ) : null}
           <View style={styles.bioContainer}>
             <Text style={styles.bioText}>{bioText || t('no_bio', language)}</Text>
+            {bioApiState.translated != null && (
+              <Text style={[styles.bioText, { fontSize: 11, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' }]}>
+                {t('translated_by_ai', language)}
+              </Text>
+            )}
           </View>
         </View>
 
