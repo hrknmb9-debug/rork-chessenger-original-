@@ -70,71 +70,6 @@ interface HostedEventWithParticipants {
 
 const PROFILE_BIO_ITEM_ID = 'profile-bio';
 
-function ProfileHeaderLogo({ colors }: { colors: import('@/constants/colors').ThemeColors }) {
-  const iconPulse = useRef(new Animated.Value(1)).current;
-  const shimmer = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(iconPulse, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
-        Animated.timing(iconPulse, { toValue: 1, duration: 1000, useNativeDriver: true }),
-      ])
-    ).start();
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 2000, useNativeDriver: false }),
-        Animated.timing(shimmer, { toValue: 0, duration: 2000, useNativeDriver: false }),
-      ])
-    ).start();
-  }, []);
-
-  const titleColor = shimmer.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [colors.textPrimary, '#22C55E', colors.textPrimary],
-  });
-
-  return (
-    <View style={profileLogoStyles.row}>
-      <Animated.View style={[profileLogoStyles.iconWrap, { transform: [{ scale: iconPulse }] }]}>
-        <Image
-          source={require('@/assets/images/app-icon.png')}
-          style={profileLogoStyles.iconImg}
-          contentFit="cover"
-        />
-      </Animated.View>
-      <View>
-        <Animated.Text style={[profileLogoStyles.title, { color: titleColor }]}>
-          Chessenger
-        </Animated.Text>
-        <View style={profileLogoStyles.subtitleRow}>
-          <View style={profileLogoStyles.dot} />
-          <Text style={[profileLogoStyles.subtitle, { color: colors.textMuted }]}>My Profile</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-const profileLogoStyles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 8 },
-      android: { elevation: 4 },
-      web: { boxShadow: '0 3px 10px rgba(34,197,94,0.35)' } as any,
-    }),
-  },
-  iconImg: { width: 38, height: 38 },
-  title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.5 },
-  subtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
-  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' },
-  subtitle: { fontSize: 10, fontWeight: '500' },
-});
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
@@ -386,18 +321,15 @@ export default function ProfileScreen() {
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <ProfileHeaderLogo colors={colors} />
-          <View style={styles.headerActions}>
-            <Pressable onPress={() => router.push('/profile/favorites' as any)} style={styles.headerBtn}>
-              <Star size={22} color={colors.accent} />
-            </Pressable>
-            <Pressable onPress={openQR} style={styles.headerBtn}>
-              <QrCode size={22} color={colors.textPrimary} />
-            </Pressable>
-            <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerBtn}>
-              <Settings size={22} color={colors.textPrimary} />
-            </Pressable>
-          </View>
+          <Pressable onPress={() => router.push('/profile/favorites' as any)} style={styles.headerBtn}>
+            <Star size={22} color={colors.accent} />
+          </Pressable>
+          <Pressable onPress={openQR} style={styles.headerBtn}>
+            <QrCode size={22} color={colors.textPrimary} />
+          </Pressable>
+          <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerBtn}>
+            <Settings size={22} color={colors.textPrimary} />
+          </Pressable>
         </View>
       </SafeAreaView>
 
@@ -693,20 +625,15 @@ function createStyles(colors: any) {
     safeArea: { backgroundColor: colors.background },
     header: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      justifyContent: 'flex-end',
       paddingHorizontal: 20,
-      paddingVertical: 10,
-    },
-    headerActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
+      paddingVertical: 12,
+      gap: 12,
     },
     headerBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       backgroundColor: colors.surface,
       alignItems: 'center',
       justifyContent: 'center',
