@@ -35,3 +35,9 @@ ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "comments_insert_own" ON public.comments;
 CREATE POLICY "comments_insert_own" ON public.comments FOR INSERT TO authenticated
 WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND user_id = (SELECT auth.uid()));
+
+-- 3. matches (対局リクエスト INSERT)
+ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "matches_insert_requester" ON public.matches;
+CREATE POLICY "matches_insert_requester" ON public.matches FOR INSERT TO authenticated
+WITH CHECK ((SELECT auth.uid()) IS NOT NULL AND requester_id = (SELECT auth.uid()));
