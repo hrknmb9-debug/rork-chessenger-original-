@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "CHESSENGER",
+    "name": "chessenger",
     "slug": "chessenger",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -15,13 +15,15 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.CHESSENGER",
+      "bundleIdentifier": "chessenger.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "プロフィール写真やタイムライン投稿に使用します",
         "NSPhotoLibraryAddUsageDescription": "写真を保存するために使用します",
         "NSCameraUsageDescription": "プロフィール写真・タイムライン投稿の撮影、およびQRコードスキャンに使用します",
         "NSLocationWhenInUseUsageDescription": "近くのチェス対局相手を探すために位置情報を使用します",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       },
       "entitlements": {
         "aps-environment": "production"
@@ -37,8 +39,15 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "rork-app" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "rork-app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
