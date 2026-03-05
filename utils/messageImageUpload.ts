@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '@/utils/supabaseClient';
 
 const LOG_TAG = '[MessageImageUpload]';
@@ -12,9 +14,8 @@ export type MessageImageUploadResult = { url: string } | { error: string };
 async function normalizeToCachePath(localUri: string): Promise<string> {
   if (localUri.startsWith('file://')) return localUri;
   try {
-    const IM = await import('expo-image-manipulator');
-    const fmt = IM.SaveFormat?.JPEG ?? ('jpeg' as unknown as import('expo-image-manipulator').SaveFormat);
-    const r = await IM.manipulateAsync(localUri, [], { compress: 0.85, format: fmt });
+    const fmt = ImageManipulator.SaveFormat?.JPEG ?? ImageManipulator.SaveFormat.JPEG;
+    const r = await ImageManipulator.manipulateAsync(localUri, [], { compress: 0.85, format: fmt });
     return r.uri;
   } catch (e) {
     console.warn(LOG_TAG, 'normalizeToCachePath failed:', e);
@@ -48,8 +49,6 @@ async function uploadViaFileSystem(
   filePath: string,
   contentType: string
 ): Promise<MessageImageUploadResult> {
-  const FileSystem = await import('expo-file-system');
-
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) return { error: '認証セッションが取得できませんでした。再ログインしてください。' };
