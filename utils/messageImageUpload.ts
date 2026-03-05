@@ -6,30 +6,9 @@ const MESSAGE_IMAGES_BUCKET = 'message-images';
 
 export type MessageImageUploadResult = { url: string } | { error: string };
 
-// ─── ネイティブ Blob 取得（XHR: ノンブロッキング） ──────────────────────────
+// ─── ユーティリティ ───────────────────────────────────────────────────────────
 
-/**
- * XHR で file:// URI から Blob を読み込む。
- *
- * なぜ base64ToBlob ではなく XHR か:
- *   atob() + Uint8Array ループは同期処理のため、2MB 以上の画像で
- *   JS スレッドを数秒ブロックし UI が完全フリーズする。
- *   XHR の responseType='blob' は React Native ネイティブスタックで動作し
- *   JS スレッドをブロックしない。
- */
-function readFileAsBlob(fileUri: string, mimeType: string): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    const xhr = new XMLHttpRequest();
-    xhr.responseType = 'blob';
-    xhr.onload = () => resolve(xhr.status === 200 && xhr.response ? (xhr.response as Blob) : null);
-    xhr.onerror = () => { console.warn(LOG_TAG, 'XHR read error:', fileUri?.slice(0, 50)); resolve(null); };
-    xhr.open('GET', fileUri);
-    xhr.setRequestHeader('Accept', mimeType);
-    xhr.send();
-  });
-}
-
-/** ph:// / assets-library:// を file:// に変換（ImageManipulator 経由） */
+/** ph:// / assets-library:// を file:// に正規化（iOS写真ライブラリ URI 対策） */
 async function normalizeToCachePath(localUri: string): Promise<string> {
   if (localUri.startsWith('file://')) return localUri;
   try {
@@ -43,21 +22,89 @@ async function normalizeToCachePath(localUri: string): Promise<string> {
   }
 }
 
-// ─── iOS/Android アップロード（XHR 直接: FormData 回避） ─────────────────────
+/** Supabase Storage の公開 URL を返す */
+function getPublicUrl(filePath: string): string {
+  const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
+  return (data?.publicUrl ?? '').trim();
+}
+
+// ─── iOS/Android: FileSystem.uploadAsync（第一手段・実証済みネイティブ） ──────
 
 /**
- * Blob を XHR で直接 Supabase Storage REST API にアップロードする。
+ * expo-file-system の uploadAsync を使った iOS/Android 専用アップロード。
  *
- * 【なぜ Supabase JS storage.upload() を使わないのか】
- * storage-js v2 は Blob を渡すと強制的に FormData.append('', blob) にラップする。
- * React Native では FormData に空キーで Blob を追加する操作が正常に動作せず、
- * サイレントに失敗する。XHR で Blob を直接 send() すると
- * React Native ネイティブ HTTP スタックが生バイナリとして送信するため確実に動作する。
+ * 【選定理由】
+ * - iOS ネイティブ HTTP スタック（NSURLSession）を直接使用
+ * - ファイルを JS メモリに展開せず直接ストリーム送信 → メモリ圧迫なし
+ * - Content-Type / Authorization / apikey ヘッダーを確実に送信できる
+ * - チャット画像で実績あり（既知の動作確認済み）
+ *
+ * 【以前 timeline で失敗した理由】
+ * apikey ヘッダーが欠落していたため Supabase ゲートウェイが 401 を返していた。
+ * 現在は apikey を明示的に含めているため解消済み。
  */
-async function uploadBlobViaXHR(
-  blob: Blob,
+async function uploadViaFileSystem(
+  fileUri: string,
   filePath: string,
   contentType: string
+): Promise<MessageImageUploadResult> {
+  const FileSystem = await import('expo-file-system');
+
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) return { error: '認証セッションが取得できませんでした。再ログインしてください。' };
+
+  const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
+  const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${MESSAGE_IMAGES_BUCKET}/${filePath}`;
+
+  console.log(LOG_TAG, '[FS] uploading path=', filePath, 'uri=', fileUri?.slice(0, 60));
+
+  const result = await FileSystem.uploadAsync(uploadUrl, fileUri, {
+    httpMethod: 'POST',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': contentType,
+      'x-upsert': 'false',
+    },
+  });
+
+  console.log(LOG_TAG, '[FS] status=', result.status, 'body=', result.body?.slice(0, 120));
+
+  if (result.status >= 200 && result.status < 300) {
+    const publicUrl = getPublicUrl(filePath);
+    if (publicUrl) {
+      console.log(LOG_TAG, '[FS] upload success');
+      return { url: publicUrl + '?t=' + Date.now() };
+    }
+    return { error: '公開URLの取得に失敗しました' };
+  }
+
+  return { error: `アップロードに失敗しました (HTTP ${result.status}): ${result.body?.slice(0, 100) ?? ''}` };
+}
+
+// ─── フォールバック: XHR アップロード（FileSystem 失敗時のみ） ────────────────
+
+/**
+ * XHR で直接 Supabase Storage REST API にアップロードするフォールバック。
+ *
+ * 【XHR upload を第一手段にしない理由】
+ * - React Native では xhr.send(blob) 時に iOS ネイティブが Content-Type を
+ *   Blob の type プロパティで上書きする場合がある。
+ *   file:// XHR 読み込み時に Blob の type が空になると
+ *   アップロードリクエストの Content-Type が消え Supabase が拒否する。
+ * - XHR の file:// GET は React Native によっては status=0 を返すため
+ *   200 のみチェックすると常に失敗扱いになる。
+ *
+ * FileSystem.uploadAsync が失敗した場合のみ試みる。
+ */
+async function uploadViaXHRFallback(
+  localUri: string,
+  filePath: string,
+  contentType: string,
+  base64FromPicker?: string
 ): Promise<MessageImageUploadResult> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
@@ -67,36 +114,61 @@ async function uploadBlobViaXHR(
   const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
   const uploadUrl = `${supabaseUrl}/storage/v1/object/${MESSAGE_IMAGES_BUCKET}/${filePath}`;
 
-  console.log(LOG_TAG, '[XHR] uploading blob size=', blob.size, 'path=', filePath);
+  // Blob 取得: XHR read（status 0 も正常扱い）または base64FromPicker
+  let blob: Blob | null = await new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.responseType = 'blob';
+    // file:// URI は status=0 で成功する場合があるため response の有無で判定
+    xhr.onload = () => resolve(xhr.response ? (xhr.response as Blob) : null);
+    xhr.onerror = () => resolve(null);
+    xhr.open('GET', localUri);
+    xhr.send();
+  });
+
+  if (!blob || blob.size === 0) {
+    if (base64FromPicker?.length) {
+      const binary = atob(base64FromPicker);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      blob = new Blob([bytes.buffer], { type: contentType });
+    }
+  }
+
+  if (!blob || blob.size === 0) {
+    return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
+  }
+
+  console.log(LOG_TAG, '[XHR fallback] uploading blob size=', blob.size);
 
   const status = await new Promise<number>((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('apikey', anonKey);
-    xhr.setRequestHeader('Content-Type', contentType);
+    // Blob の type が正しく設定されていれば XHR が自動で Content-Type を付与する
+    // 空の場合に備えて明示的にも設定する
+    if (!blob!.type) xhr.setRequestHeader('Content-Type', contentType);
     xhr.setRequestHeader('x-upsert', 'false');
     xhr.onload = () => resolve(xhr.status);
-    xhr.onerror = () => { console.warn(LOG_TAG, '[XHR] network error'); resolve(0); };
+    xhr.onerror = () => resolve(0);
     xhr.send(blob);
   });
 
   if (status >= 200 && status < 300) {
-    const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
-    const publicUrl = (data?.publicUrl ?? '').trim();
+    const publicUrl = getPublicUrl(filePath);
     if (publicUrl) {
-      console.log(LOG_TAG, '[XHR] upload success');
+      console.log(LOG_TAG, '[XHR fallback] upload success');
       return { url: publicUrl + '?t=' + Date.now() };
     }
     return { error: '公開URLの取得に失敗しました' };
   }
 
-  return { error: `アップロードに失敗しました (HTTP ${status})` };
+  return { error: `アップロードに失敗しました (XHR fallback HTTP ${status})` };
 }
 
-// ─── Web アップロード（Supabase JS クライアント: FormData は Web で正常動作） ─
+// ─── Web: Supabase JS クライアント（FormData は Web で正常動作） ─────────────
 
-async function uploadBlobViaSupabaseClient(blob: Blob, filePath: string, contentType: string): Promise<MessageImageUploadResult> {
+async function uploadViaSupabaseClientWeb(blob: Blob, filePath: string, contentType: string): Promise<MessageImageUploadResult> {
   console.log(LOG_TAG, '[Web] uploading blob size=', blob.size, 'path=', filePath);
 
   const { error } = await supabase.storage
@@ -108,8 +180,7 @@ async function uploadBlobViaSupabaseClient(blob: Blob, filePath: string, content
     return { error: `アップロードに失敗しました: ${error.message}` };
   }
 
-  const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
-  const publicUrl = (data?.publicUrl ?? '').trim();
+  const publicUrl = getPublicUrl(filePath);
   if (!publicUrl) return { error: '公開URLの取得に失敗しました' };
 
   console.log(LOG_TAG, '[Web] upload success');
@@ -120,8 +191,12 @@ async function uploadBlobViaSupabaseClient(blob: Blob, filePath: string, content
 
 /**
  * チャット用画像アップロード。
- * iOS/Android: XHR read + XHR upload（FormData 回避・ノンブロッキング）
- * Web: fetch Blob + Supabase JS クライアント
+ *
+ * iOS/Android:
+ *   第1: FileSystem.uploadAsync（ネイティブHTTP・実証済み・チャットで動作確認済み）
+ *   第2: XHR fallback（FileSystem 失敗時のみ）
+ * Web:
+ *   fetch(blob:URI) → Supabase JS クライアント
  */
 export async function uploadMessageImage(
   localUri: string,
@@ -140,26 +215,19 @@ export async function uploadMessageImage(
       const res = await fetch(localUri).catch(() => null);
       const blob = res?.ok ? await res.blob().catch(() => null) : null;
       if (!blob || blob.size === 0) return { error: '画像データが取得できませんでした。' };
-      return uploadBlobViaSupabaseClient(blob, filePath, contentType);
+      return uploadViaSupabaseClientWeb(blob, filePath, contentType);
     }
 
     // iOS / Android ─────────────────────────────────────────────────────────
     const fileUri = await normalizeToCachePath(localUri);
-    let blob = await readFileAsBlob(fileUri, contentType);
 
-    if (!blob || blob.size === 0) {
-      console.warn(LOG_TAG, '[Chat] XHR read failed, trying base64 fallback');
-      // フォールバック: base64FromPicker が存在すれば Blob に変換
-      if (base64FromPicker?.length) {
-        const binary = atob(base64FromPicker);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        blob = new Blob([bytes.buffer], { type: contentType });
-      }
-    }
+    // 第1: FileSystem.uploadAsync（ネイティブ・確実）
+    const fsResult = await uploadViaFileSystem(fileUri, filePath, contentType);
+    if ('url' in fsResult) return fsResult;
 
-    if (!blob || blob.size === 0) return { error: '画像データが取得できませんでした。別の画像をお試しください。' };
-    return uploadBlobViaXHR(blob, filePath, contentType);
+    // 第2: XHR fallback（FileSystem 失敗時のみ）
+    console.warn(LOG_TAG, '[Chat] FileSystem failed, trying XHR fallback. error=', fsResult.error);
+    return uploadViaXHRFallback(fileUri, filePath, contentType, base64FromPicker);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(LOG_TAG, '[Chat] upload exception:', msg);
@@ -169,17 +237,21 @@ export async function uploadMessageImage(
 
 /**
  * タイムライン投稿用画像アップロード。
- * iOS/Android: XHR read + XHR upload（FormData 回避・ノンブロッキング）
- * Web: fetch Blob + Supabase JS クライアント
  *
- * 【iOS 問題履歴】
- * 1. ArrayBuffer + fetch: iOS Hermes ブリッジで不安定 → 廃止
- * 2. FileSystem.uploadAsync: apikey ヘッダー欠落で 401 → 廃止
- * 3. base64ToBlob: atob() ループが同期 → 大きな画像で UI フリーズ → 廃止
+ * iOS/Android:
+ *   第1: FileSystem.uploadAsync（ネイティブHTTP・apikey 付き）
+ *   第2: XHR fallback（FileSystem 失敗時のみ）
+ * Web:
+ *   fetch(blob:URI) → Supabase JS クライアント
+ *
+ * 【iOS 試行錯誤の履歴】
+ * 1. ArrayBuffer + fetch: Hermes ブリッジでシリアライズ不安定 → 廃止
+ * 2. FileSystem.uploadAsync のみ: apikey ヘッダー欠落で 401 → apikey 追加で修正
+ * 3. base64ToBlob: atob()+ループが同期 → 大きな画像で UI フリーズ → 廃止
  * 4. Blob + Supabase JS storage.upload(): storage-js が FormData.append('',blob) にラップ
  *    → React Native の FormData は空キーの Blob append を正常処理できない → 廃止
- * 5. 現在: XHR read(file://) + XHR upload(blob) が React Native ネイティブ HTTP
- *    スタックを使い最も確実に動作する
+ * 5. XHR read(file://) + XHR upload: file:// 読み込みが status=0 を返し常に失敗 → 廃止
+ * 6. 現在: FileSystem.uploadAsync（第1）+ XHR fallback（第2）
  */
 export async function uploadTimelineImage(
   localUri: string,
@@ -200,29 +272,19 @@ export async function uploadTimelineImage(
         console.warn(LOG_TAG, '[Timeline] web fetch failed');
         return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
       }
-      return uploadBlobViaSupabaseClient(blob, filePath, contentType);
+      return uploadViaSupabaseClientWeb(blob, filePath, contentType);
     }
 
     // iOS / Android ─────────────────────────────────────────────────────────
     const fileUri = await normalizeToCachePath(localUri);
-    let blob = await readFileAsBlob(fileUri, contentType);
 
-    if (!blob || blob.size === 0) {
-      console.warn(LOG_TAG, '[Timeline] XHR read failed, trying base64 fallback');
-      if (base64FromPicker?.length) {
-        const binary = atob(base64FromPicker);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        blob = new Blob([bytes.buffer], { type: contentType });
-      }
-    }
+    // 第1: FileSystem.uploadAsync（ネイティブ・確実）
+    const fsResult = await uploadViaFileSystem(fileUri, filePath, contentType);
+    if ('url' in fsResult) return fsResult;
 
-    if (!blob || blob.size === 0) {
-      console.warn(LOG_TAG, '[Timeline] failed to get blob');
-      return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
-    }
-
-    return uploadBlobViaXHR(blob, filePath, contentType);
+    // 第2: XHR fallback（FileSystem 失敗時のみ）
+    console.warn(LOG_TAG, '[Timeline] FileSystem failed, trying XHR fallback. error=', fsResult.error);
+    return uploadViaXHRFallback(fileUri, filePath, contentType, base64FromPicker);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(LOG_TAG, '[Timeline] upload exception:', msg);
