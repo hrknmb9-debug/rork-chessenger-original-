@@ -4,113 +4,94 @@ import { supabase } from '@/utils/supabaseClient';
 const LOG_TAG = '[MessageImageUpload]';
 const MESSAGE_IMAGES_BUCKET = 'message-images';
 
-/**
- * Supabase が要求する共通ヘッダーを生成する。
- * - Authorization: JWT ベアラートークン（RLS の auth.uid() / auth.jwt() に使用される）
- * - apikey: anon key（Supabase ゲートウェイがプロジェクト識別に必須。欠落すると 400/401 になる）
- * - Content-Type: 画像 MIME タイプ
- * - x-upsert: 重複アップロード拒否
- */
-function buildStorageHeaders(token: string, contentType: string): Record<string, string> {
-  const anonKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
-  return {
-    Authorization: `Bearer ${token}`,
-    apikey: anonKey,
-    'Content-Type': contentType,
-    'x-upsert': 'false',
-  };
-}
-
-/**
- * iOS ネイティブアップローダー: expo-file-system の uploadAsync を使用。
- * React Native の fetch + ArrayBuffer はブリッジ経由のため iOS で不安定になる場合がある。
- * uploadAsync は iOS/Android のネイティブ HTTP スタックを直接使うため確実に動作する。
- *
- * 対応 URI: file:// / ph:// / assets-library:// など iOS ネイティブ URI 全般
- */
-async function uploadViaFileSystem(
-  localUri: string,
-  uploadUrl: string,
-  token: string,
-  contentType: string
-): Promise<{ ok: boolean; status: number; body: string }> {
-  const FileSystem = await import('expo-file-system');
-
-  // ph:// や assets-library:// は file:// に変換してから uploadAsync に渡す
-  let fileUri = localUri;
-  if (!localUri.startsWith('file://')) {
-    const ImageManipulator = await import('expo-image-manipulator');
-    const fmt = ImageManipulator.SaveFormat?.JPEG ?? ('jpeg' as unknown as import('expo-image-manipulator').SaveFormat);
-    const converted = await ImageManipulator.manipulateAsync(localUri, [], {
-      compress: 0.85,
-      format: fmt,
-    });
-    fileUri = converted.uri;
-  }
-
-  const result = await FileSystem.uploadAsync(uploadUrl, fileUri, {
-    httpMethod: 'POST',
-    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-    headers: buildStorageHeaders(token, contentType),
-  });
-
-  return { ok: result.status >= 200 && result.status < 300, status: result.status, body: result.body };
-}
-
-/** base64 を ArrayBuffer に変換（Web / Hermes 両対応） */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  try {
-    if (typeof atob !== 'undefined') {
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      return bytes.buffer;
-    }
-  } catch {
-    // フォールバックへ
-  }
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  const lookup = new Uint8Array(256);
-  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
-  const stripped = base64.replace(/=+$/, '');
-  const len = stripped.length;
-  const byteLen = (len * 3) >> 2;
-  const bytes = new Uint8Array(byteLen);
-  let p = 0;
-  for (let i = 0; i < len; i += 4) {
-    const a = lookup[stripped.charCodeAt(i)] ?? 0;
-    const b = lookup[stripped.charCodeAt(i + 1)] ?? 0;
-    const c = lookup[stripped.charCodeAt(i + 2)] ?? 0;
-    const d = lookup[stripped.charCodeAt(i + 3)] ?? 0;
-    bytes[p++] = (a << 2) | (b >> 4);
-    if (p < byteLen) bytes[p++] = ((b & 15) << 4) | (c >> 2);
-    if (p < byteLen) bytes[p++] = ((c & 3) << 6) | d;
-  }
-  return bytes.buffer;
-}
-
 export type MessageImageUploadResult = { url: string } | { error: string };
 
-/** 認証トークン + Supabase URL を取得するユーティリティ */
-async function getUploadPrereqs(): Promise<{ token: string; supabaseUrl: string } | null> {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token;
-  if (!token) return null;
-  const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim();
-  if (!supabaseUrl) return null;
-  return { token, supabaseUrl };
+/**
+ * base64 文字列から Blob を生成する（iOS / Android / Web 共通）。
+ *
+ * 設計方針:
+ * - fetch body に Blob を渡すと React Native 0.71+ で安定動作する
+ * - ArrayBuffer は一部の iOS/Hermes バージョンでシリアライズ問題が発生するため使わない
+ * - Supabase JS クライアントに渡すと Authorization + apikey ヘッダーが自動付加される
+ */
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes.buffer], { type: mimeType });
 }
 
-/** Supabase Storage の公開 URL を構築して返す */
-function getPublicUrl(filePath: string): string {
+/**
+ * ローカル URI から base64 文字列を取得する（iOS/Android 専用）。
+ *
+ * 優先順位:
+ * 1. ピッカーが返した base64（最速・ファイル読み込み不要）
+ * 2. expo-file-system で file:// を読む（ピッカーが base64 を返さない場合のフォールバック）
+ * 3. expo-image-manipulator で ph:// / assets-library:// を file:// に変換してから読む
+ */
+async function getNativeBase64(localUri: string, base64FromPicker?: string): Promise<string | null> {
+  // 1. ピッカー提供 base64（最優先）
+  if (base64FromPicker?.length) return base64FromPicker;
+
+  const FileSystem = await import('expo-file-system');
+
+  // 2. file:// を直接読む
+  if (localUri.startsWith('file://')) {
+    const b64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    }).catch((e) => {
+      console.warn(LOG_TAG, 'FileSystem.readAsStringAsync failed:', e);
+      return null;
+    });
+    if (b64) return b64;
+  }
+
+  // 3. ph:// / assets-library:// → ImageManipulator で file:// に変換してから読む
+  try {
+    const IM = await import('expo-image-manipulator');
+    const fmt = IM.SaveFormat?.JPEG ?? ('jpeg' as unknown as import('expo-image-manipulator').SaveFormat);
+    const converted = await IM.manipulateAsync(localUri, [], { compress: 0.85, format: fmt });
+    return await FileSystem.readAsStringAsync(converted.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    }).catch(() => null);
+  } catch (e) {
+    console.warn(LOG_TAG, 'ImageManipulator fallback failed:', e);
+    return null;
+  }
+}
+
+/**
+ * Blob を Supabase Storage にアップロードして公開 URL を返す共通実装。
+ *
+ * Supabase JS クライアント経由のため Authorization + apikey ヘッダーが自動付加される。
+ * 以前使用していた手動 fetch / FileSystem.uploadAsync は:
+ *   - apikey ヘッダーが欠落しやすい（400/401 サイレント失敗）
+ *   - iOS ネイティブブリッジ越しの ArrayBuffer が不安定
+ * のため廃止した。Blob + Supabase JS クライアントが最も信頼性が高い。
+ */
+async function uploadBlobToStorage(blob: Blob, filePath: string, contentType: string): Promise<MessageImageUploadResult> {
+  console.log(LOG_TAG, 'uploading blob size=', blob.size, 'path=', filePath);
+
+  const { error: uploadError } = await supabase.storage
+    .from(MESSAGE_IMAGES_BUCKET)
+    .upload(filePath, blob, { contentType, cacheControl: '31536000', upsert: false });
+
+  if (uploadError) {
+    console.warn(LOG_TAG, 'upload error:', uploadError.message);
+    return { error: `アップロードに失敗しました: ${uploadError.message}` };
+  }
+
   const { data } = supabase.storage.from(MESSAGE_IMAGES_BUCKET).getPublicUrl(filePath);
-  return (data?.publicUrl ?? '').trim();
+  const publicUrl = (data?.publicUrl ?? '').trim();
+  if (!publicUrl) return { error: '公開URLの取得に失敗しました' };
+
+  console.log(LOG_TAG, 'upload success');
+  return { url: publicUrl + '?t=' + Date.now() };
 }
 
 /**
  * チャット用画像アップロード。
- * iOS では FileSystem.uploadAsync（ネイティブ HTTP）を優先し、
- * 失敗時に base64 → fetch へフォールバックする。
+ * base64 → Blob → Supabase JS クライアントの一本道で iOS / Web 両対応。
  */
 export async function uploadMessageImage(
   localUri: string,
@@ -118,130 +99,80 @@ export async function uploadMessageImage(
   roomId: string,
   base64FromPicker?: string
 ): Promise<MessageImageUploadResult> {
-  const prereqs = await getUploadPrereqs();
-  if (!prereqs) return { error: '認証セッションが取得できませんでした。再ログインしてください。' };
-  const { token, supabaseUrl } = prereqs;
-
   const fileExt = localUri.toLowerCase().includes('.png') ? 'png' : 'jpg';
   const filePath = `${userId}/${roomId}/${Date.now()}.${fileExt}`;
   const contentType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/${MESSAGE_IMAGES_BUCKET}/${filePath}`;
 
-  // iOS / Android: FileSystem.uploadAsync（ネイティブ HTTP, file:// も ph:// も対応）
-  if (Platform.OS !== 'web') {
-    try {
-      const result = await uploadViaFileSystem(localUri, uploadUrl, token, contentType);
-      if (result.ok) {
-        const publicUrl = getPublicUrl(filePath);
-        if (publicUrl) return { url: publicUrl + '?t=' + Date.now() };
-      }
-      console.warn(LOG_TAG, '[Chat] FileSystem upload failed:', result.status, result.body);
-    } catch (e) {
-      console.warn(LOG_TAG, '[Chat] FileSystem upload exception:', e);
-    }
-  }
-
-  // フォールバック: Web または FileSystem 失敗時 → base64 → ArrayBuffer → fetch
-  let arrayBuffer: ArrayBuffer | null = null;
-  if (Platform.OS === 'web') {
-    const res = await fetch(localUri).catch(() => null);
-    if (res?.ok) arrayBuffer = await res.arrayBuffer().catch(() => null);
-  } else if (base64FromPicker?.length) {
-    arrayBuffer = base64ToArrayBuffer(base64FromPicker);
-  }
-
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    return { error: '画像データが取得できませんでした。別の画像をお試しください。' };
-  }
+  console.log(LOG_TAG, '[Chat] upload start, platform=', Platform.OS, 'hasBase64=', !!base64FromPicker);
 
   try {
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: buildStorageHeaders(token, contentType),
-      body: arrayBuffer,
-    });
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      return { error: `アップロードに失敗しました (${response.status}): ${errText}` };
+    let blob: Blob | null = null;
+
+    if (Platform.OS === 'web') {
+      // Web: blob: URI を fetch で読んで Blob を取得
+      const res = await fetch(localUri).catch(() => null);
+      if (res?.ok) blob = await res.blob().catch(() => null);
+    } else {
+      // iOS / Android: base64 → Blob（FileSystem 経由フォールバック含む）
+      const base64 = await getNativeBase64(localUri, base64FromPicker);
+      if (base64?.length) blob = base64ToBlob(base64, contentType);
     }
-    const publicUrl = getPublicUrl(filePath);
-    if (!publicUrl) return { error: '公開URLの取得に失敗しました' };
-    return { url: publicUrl + '?t=' + Date.now() };
+
+    if (!blob || blob.size === 0) {
+      return { error: '画像データが取得できませんでした。別の画像をお試しください。' };
+    }
+
+    return uploadBlobToStorage(blob, filePath, contentType);
   } catch (e) {
-    return { error: `アップロードに失敗しました: ${e instanceof Error ? e.message : String(e)}` };
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(LOG_TAG, '[Chat] upload exception:', msg);
+    return { error: `アップロードに失敗しました: ${msg}` };
   }
 }
 
 /**
  * タイムライン投稿用画像アップロード。
- * iOS では FileSystem.uploadAsync（ネイティブ HTTP）を優先し、
- * 失敗時に base64 → fetch へフォールバックする。
+ * base64 → Blob → Supabase JS クライアントの一本道で iOS / Web 両対応。
+ *
+ * 【iOS での問題履歴と解決策】
+ * - Supabase JS .upload() + ArrayBuffer: iOS ブリッジでシリアライズ不安定 → 廃止
+ * - FileSystem.uploadAsync: apikey ヘッダー欠落で 401、また auth 処理が手動で煩雑 → 廃止
+ * - 現在: base64 → Blob → Supabase JS .upload() が最もシンプルかつ確実
  */
 export async function uploadTimelineImage(
   localUri: string,
   userId: string,
   base64FromPicker?: string
 ): Promise<MessageImageUploadResult> {
-  const prereqs = await getUploadPrereqs();
-  if (!prereqs) return { error: '認証セッションが取得できませんでした。再ログインしてください。' };
-  const { token, supabaseUrl } = prereqs;
-
   const fileExt = localUri.toLowerCase().includes('.png') ? 'png' : 'jpg';
   const filePath = `${userId}/timeline/${Date.now()}.${fileExt}`;
   const contentType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
-  const uploadUrl = `${supabaseUrl}/storage/v1/object/${MESSAGE_IMAGES_BUCKET}/${filePath}`;
 
-  console.log(LOG_TAG, '[Timeline] upload start, uri=', localUri?.slice(0, 40), 'hasBase64=', !!base64FromPicker);
-
-  // iOS / Android: FileSystem.uploadAsync（ネイティブ HTTP, file:// も ph:// も対応）
-  if (Platform.OS !== 'web') {
-    try {
-      const result = await uploadViaFileSystem(localUri, uploadUrl, token, contentType);
-      if (result.ok) {
-        const publicUrl = getPublicUrl(filePath);
-        if (publicUrl) {
-          console.log(LOG_TAG, '[Timeline] FileSystem upload success');
-          return { url: publicUrl + '?t=' + Date.now() };
-        }
-      }
-      console.warn(LOG_TAG, '[Timeline] FileSystem upload failed:', result.status, result.body);
-    } catch (e) {
-      console.warn(LOG_TAG, '[Timeline] FileSystem upload exception:', e);
-    }
-  }
-
-  // フォールバック: Web または FileSystem 失敗時 → base64 → ArrayBuffer → fetch
-  const arrayBuffer = await (async (): Promise<ArrayBuffer | null> => {
-    if (base64FromPicker?.length) return base64ToArrayBuffer(base64FromPicker);
-    if (Platform.OS === 'web') {
-      const res = await fetch(localUri).catch(() => null);
-      return res?.ok ? res.arrayBuffer() : null;
-    }
-    return null;
-  })();
-
-  if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-    console.warn(LOG_TAG, '[Timeline] no image data for fallback');
-    return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
-  }
+  console.log(LOG_TAG, '[Timeline] upload start, platform=', Platform.OS, 'uri=', localUri?.slice(0, 50), 'hasBase64=', !!base64FromPicker);
 
   try {
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: buildStorageHeaders(token, contentType),
-      body: arrayBuffer,
-    });
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.warn(LOG_TAG, '[Timeline] fallback upload failed:', response.status, errText);
-      return { error: `アップロードに失敗しました (${response.status}): ${errText}` };
+    let blob: Blob | null = null;
+
+    if (Platform.OS === 'web') {
+      // Web: blob: URI を fetch で読んで Blob を取得
+      const res = await fetch(localUri).catch(() => null);
+      if (res?.ok) blob = await res.blob().catch(() => null);
+    } else {
+      // iOS / Android: base64 → Blob（FileSystem 経由フォールバック含む）
+      const base64 = await getNativeBase64(localUri, base64FromPicker);
+      if (base64?.length) blob = base64ToBlob(base64, contentType);
     }
-    const publicUrl = getPublicUrl(filePath);
-    if (!publicUrl) return { error: '公開URLの取得に失敗しました' };
-    console.log(LOG_TAG, '[Timeline] fallback upload success');
-    return { url: publicUrl + '?t=' + Date.now() };
+
+    if (!blob || blob.size === 0) {
+      console.warn(LOG_TAG, '[Timeline] failed to get blob');
+      return { error: '画像データの取得に失敗しました。別の画像をお試しください。' };
+    }
+
+    return uploadBlobToStorage(blob, filePath, contentType);
   } catch (e) {
-    return { error: `アップロードに失敗しました: ${e instanceof Error ? e.message : String(e)}` };
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn(LOG_TAG, '[Timeline] upload exception:', msg);
+    return { error: `アップロードに失敗しました: ${msg}` };
   }
 }
 
