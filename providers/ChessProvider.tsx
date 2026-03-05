@@ -232,6 +232,8 @@ export const [ChessProvider, useChess] = createContextHook(() => {
   const [activeUsersCount, setActiveUsersCount] = useState<number>(0);
   const [authReady, setAuthReady] = useState<boolean>(false);
   const [unreadCountByUserId, setUnreadCountByUserId] = useState<Record<string, number>>({});
+  const [favoritePlayerIds, setFavoritePlayerIds] = useState<Set<string>>(new Set());
+  const [favoritePlayers, setFavoritePlayers] = useState<Player[]>([]);
   const { userLocation, getDistanceToPlayer } = useLocation();
   const lastSeenInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const profileCacheRef = useRef<Map<string, Player>>(new Map());
@@ -267,6 +269,8 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         setTimelinePosts([]);
         setNotifications([]);
         setBlockedUsers([]);
+        setFavoritePlayerIds(new Set());
+        setFavoritePlayers([]);
         profileCacheRef.current.clear();
         eventCacheRef.current.clear();
         AsyncStorage.removeItem(EVENT_CACHE_KEY).catch(() => {});
@@ -2228,6 +2232,57 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [currentUserId, timelinePosts]);
 
+  const updateTimelinePost = useCallback(async (
+    postId: string,
+    updates: { content?: string; imageUrl?: string; event?: Partial<{ title: string; date: string; time: string; location: string; maxParticipants: number; deadlineAt?: string | null }> }
+  ) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setTimelinePosts(prev =>
+      prev.map(p => {
+        if (p.id !== postId) return p;
+        const next = { ...p };
+        if (updates.content !== undefined) next.content = updates.content;
+        if (updates.imageUrl !== undefined) next.imageUrl = updates.imageUrl;
+        if (updates.event && p.event) {
+          next.event = {
+            ...p.event,
+            ...updates.event,
+            maxParticipants: updates.event.maxParticipants ?? p.event.maxParticipants,
+          };
+        }
+        return next;
+      })
+    );
+
+    try {
+      if (updates.content !== undefined) {
+        await supabase.from('posts').update({ content: updates.content }).eq('id', postId).eq('user_id', user.id);
+      }
+      if (updates.imageUrl !== undefined) {
+        await supabase.from('posts').update({ image_url: updates.imageUrl }).eq('id', postId).eq('user_id', user.id);
+      }
+      if (updates.event) {
+        const { data: evRow } = await supabase.from('events').select('id').eq('post_id', postId).maybeSingle();
+        if (evRow?.id) {
+          const eventUpdate: Record<string, unknown> = {};
+          if (updates.event.title !== undefined) eventUpdate.title = updates.event.title;
+          if (updates.event.date !== undefined) eventUpdate.date = updates.event.date;
+          if (updates.event.time !== undefined) eventUpdate.time = updates.event.time;
+          if (updates.event.location !== undefined) eventUpdate.location = updates.event.location;
+          if (updates.event.maxParticipants !== undefined) eventUpdate.max_participants = updates.event.maxParticipants;
+          if (updates.event.deadlineAt !== undefined) eventUpdate.deadline_at = updates.event.deadlineAt;
+          if (Object.keys(eventUpdate).length > 0) {
+            await supabase.from('events').update(eventUpdate).eq('id', evRow.id);
+          }
+        }
+      }
+    } catch (e) {
+      console.log('ChessProvider: Post update failed', e);
+    }
+  }, []);
+
   const deleteTimelinePost = useCallback(async (postId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -2254,6 +2309,71 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       console.log('ChessProvider: Post delete failed', e);
     }
   }, [persistEventCache]);
+
+  const refreshFavorites = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setFavoritePlayerIds(new Set());
+      setFavoritePlayers([]);
+      return;
+    }
+    try {
+      const { data: rows, error } = await supabase
+        .from('player_favorites')
+        .select('favorite_player_id')
+        .eq('user_id', user.id);
+      if (error) {
+        console.log('ChessProvider: refreshFavorites error', error.message);
+        return;
+      }
+      const ids = new Set((rows ?? []).map((r: { favorite_player_id: string }) => r.favorite_player_id));
+      setFavoritePlayerIds(ids);
+      if (ids.size === 0) {
+        setFavoritePlayers([]);
+        return;
+      }
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', [...ids]);
+      const userLat = userLocation?.latitude;
+      const userLon = userLocation?.longitude;
+      const list = (profiles ?? []).map((p: SupabaseProfile) => supabaseProfileToPlayer(p, userLat, userLon));
+      setFavoritePlayers(list);
+    } catch (e) {
+      console.log('ChessProvider: refreshFavorites failed', e);
+    }
+  }, [userLocation?.latitude, userLocation?.longitude]);
+
+  const toggleFavorite = useCallback(async (playerId: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || playerId === user.id) return;
+    const isFav = favoritePlayerIds.has(playerId);
+    try {
+      if (isFav) {
+        await supabase
+          .from('player_favorites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('favorite_player_id', playerId);
+        setFavoritePlayerIds(prev => {
+          const next = new Set(prev);
+          next.delete(playerId);
+          return next;
+        });
+        setFavoritePlayers(prev => prev.filter(p => p.id !== playerId));
+      } else {
+        await supabase
+          .from('player_favorites')
+          .insert({ user_id: user.id, favorite_player_id: playerId });
+        setFavoritePlayerIds(prev => new Set([...prev, playerId]));
+        const prof = await fetchPlayerProfile(playerId);
+        if (prof) setFavoritePlayers(prev => [...prev, prof]);
+      }
+    } catch (e) {
+      console.log('ChessProvider: toggleFavorite failed', e);
+    }
+  }, [favoritePlayerIds, fetchPlayerProfile]);
 
   const activeMatches = useMemo(
     () => matches.filter(m => m.status === 'accepted'),
@@ -2311,6 +2431,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     toggleLike,
     addComment,
     addTimelinePost,
+    updateTimelinePost,
     blockUser,
     unblockUser,
     isUserBlocked,
@@ -2324,7 +2445,11 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     refreshNotifications,
     refreshPlayers,
     refreshTimeline,
+    refreshFavorites,
     reloadProfile,
+    favoritePlayerIds,
+    favoritePlayers,
+    toggleFavorite,
     joinEvent,
     leaveEvent,
     deleteTimelinePost,

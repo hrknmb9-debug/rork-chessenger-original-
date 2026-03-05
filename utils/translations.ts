@@ -383,6 +383,8 @@ const JA: Record<string, string> = {
   delete_post_confirm: '削除の確認',
   delete_post_desc: '本当にこの投稿を削除しますか？',
   delete_post: '削除',
+  edit_post: '編集',
+  edit_post_title: '投稿を編集',
   translating: '翻訳中...',
   translation_failed: '翻訳に失敗しました',
   mark_read: '既読',
@@ -391,6 +393,11 @@ const JA: Record<string, string> = {
   online_now: 'オンライン中',
   delete_conversation_confirm: 'この会話を削除しますか？',
   block_conversation_confirm: 'をブロックしますか？',
+  favorites_tab: 'お気に入り',
+  favorites_empty_title: 'お気に入りがありません',
+  favorites_empty_subtitle: 'プレイヤー詳細でスターを押してお気に入り登録できます',
+  add_favorite: 'お気に入りに追加',
+  remove_favorite: 'お気に入りを解除',
 };
 
 const EN: Record<string, string> = {
@@ -778,6 +785,8 @@ const EN: Record<string, string> = {
   delete_post_confirm: 'Delete post',
   delete_post_desc: 'Are you sure you want to delete this post?',
   delete_post: 'Delete',
+  edit_post: 'Edit',
+  edit_post_title: 'Edit Post',
   translating: 'Translating...',
   translation_failed: 'Translation failed',
   mark_read: 'Mark read',
@@ -786,6 +795,11 @@ const EN: Record<string, string> = {
   online_now: 'Online now',
   delete_conversation_confirm: 'Delete this conversation?',
   block_conversation_confirm: 'Block this user?',
+  favorites_tab: 'Favorites',
+  favorites_empty_title: 'No favorites yet',
+  favorites_empty_subtitle: 'Tap the star on a player\'s profile to add them to favorites',
+  add_favorite: 'Add to favorites',
+  remove_favorite: 'Remove from favorites',
 };
 
 /** 12言語のみ（SUPPORTED_LANGUAGESと一致） */

@@ -38,6 +38,7 @@ import {
   CornerDownRight,
   Hourglass,
   Trash2,
+  Pencil,
   Languages,
 } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
@@ -287,6 +288,7 @@ function PostCard({
   onComment,
   onAuthorPress,
   onImagePress,
+  onEdit,
   onDelete,
   isOwnPost,
   language,
@@ -296,6 +298,7 @@ function PostCard({
   onComment: (id: string, text: string, parentId?: string) => void;
   onAuthorPress: (id: string) => void;
   onImagePress?: (url: string) => void;
+  onEdit?: (post: TimelinePost) => void;
   onDelete?: (id: string) => void;
   isOwnPost: boolean;
   language: string;
@@ -515,23 +518,32 @@ function PostCard({
               <Text style={{ fontSize: 10, fontWeight: '600' as const, color: getTypeColor() }}>{getTypeLabel()}</Text>
             </View>
           )}
-          {isOwnPost && onDelete && (
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                Alert.alert(
-                  t('delete_post_confirm', language),
-                  t('delete_post_desc', language),
-                  [
-                    { text: t('cancel', language), style: 'cancel' },
-                    { text: t('delete_post', language), style: 'destructive', onPress: () => onDelete(post.id) },
-                  ]
-                );
-              }}
-              style={{ padding: 6 }}
-            >
-              <Trash2 size={18} color={colors.textMuted} />
-            </Pressable>
+          {isOwnPost && (
+            <>
+              {onEdit && (
+                <Pressable onPress={() => { Haptics.selectionAsync(); onEdit(post); }} style={{ padding: 6 }}>
+                  <Pencil size={18} color={colors.textMuted} />
+                </Pressable>
+              )}
+              {onDelete && (
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    Alert.alert(
+                      t('delete_post_confirm', language),
+                      t('delete_post_desc', language),
+                      [
+                        { text: t('cancel', language), style: 'cancel' },
+                        { text: t('delete_post', language), style: 'destructive', onPress: () => onDelete(post.id) },
+                      ]
+                    );
+                  }}
+                  style={{ padding: 6 }}
+                >
+                  <Trash2 size={18} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </>
           )}
         </View>
       </View>
@@ -729,13 +741,24 @@ function PostCard({
   );
 }
 
-/** チカチカ防止: 親の不要な再レンダーで画像が瞬灭しないようメモ化 */
-const MemoizedPostCard = memo(PostCard);
+/** VirtualizedList パフォーマンス: 不要な再レンダーを抑制 */
+const MemoizedPostCard = memo(PostCard, (prev, next) => {
+  if (prev.post.id !== next.post.id) return false;
+  if (prev.post.content !== next.post.content) return false;
+  if (prev.post.likes.length !== next.post.likes.length) return false;
+  if (prev.post.comments.length !== next.post.comments.length) return false;
+  if (prev.post.imageUrl !== next.post.imageUrl) return false;
+  if (prev.post.event?.id !== next.post.event?.id) return false;
+  if (prev.post.event?.title !== next.post.event?.title) return false;
+  if (prev.isOwnPost !== next.isOwnPost) return false;
+  if (prev.language !== next.language) return false;
+  return true;
+});
 
 export default function TimelineScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { timelinePosts, toggleLike, addComment, addTimelinePost, deleteTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId, setTranslationLock } = useChess();
+  const { timelinePosts, toggleLike, addComment, addTimelinePost, updateTimelinePost, deleteTimelinePost, language, refreshPlayers, refreshTimeline, activeUsersCount, currentUserId, setTranslationLock } = useChess();
   const router = useRouter();
   const [filter, setFilter] = useState<'all' | 'events' | 'my'>('all');
   const [newPostText, setNewPostText] = useState<string>('');
@@ -761,6 +784,14 @@ export default function TimelineScreen() {
   const [showDeadlineDatePicker, setShowDeadlineDatePicker] = useState<boolean>(false);
   const [showDeadlineTimePicker, setShowDeadlineTimePicker] = useState<boolean>(false);
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<TimelinePost | null>(null);
+  const [editContent, setEditContent] = useState<string>('');
+  const [editEventTitle, setEditEventTitle] = useState<string>('');
+  const [editEventDate, setEditEventDate] = useState<Date>(new Date());
+  const [editEventHour, setEditEventHour] = useState<number>(14);
+  const [editEventMinute, setEditEventMinute] = useState<number>(0);
+  const [editEventLocation, setEditEventLocation] = useState<string>('');
+  const [editEventMaxParticipants, setEditEventMaxParticipants] = useState<string>('10');
 
   const filteredPosts = useMemo(() => {
     let base: TimelinePost[];
@@ -971,6 +1002,38 @@ export default function TimelineScreen() {
     addComment(postId, text, parentId);
   }, [addComment]);
 
+  const handleEditPost = useCallback((post: TimelinePost) => {
+    setEditContent(post.content);
+    if (post.event) {
+      setEditEventTitle(post.event.title);
+      const [y, m, d] = (post.event.date || '-').split('-').map(Number);
+      setEditEventDate(new Date(y || new Date().getFullYear(), (m || new Date().getMonth() + 1) - 1, d || new Date().getDate()));
+      const [h, min] = (post.event.time || '14:00').split(':').map(Number);
+      setEditEventHour(Number.isNaN(h) ? 14 : h);
+      setEditEventMinute(Number.isNaN(min) ? 0 : min);
+      setEditEventLocation(post.event.location || '');
+      setEditEventMaxParticipants(String(post.event.maxParticipants ?? 10));
+    }
+    setEditingPost(post);
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingPost) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const updates: Parameters<typeof updateTimelinePost>[1] = { content: editContent };
+    if (editingPost.event) {
+      updates.event = {
+        title: editEventTitle,
+        date: formatDateForStorage(editEventDate),
+        time: `${String(editEventHour).padStart(2, '0')}:${String(editEventMinute).padStart(2, '0')}`,
+        location: editEventLocation,
+        maxParticipants: parseInt(editEventMaxParticipants, 10) || 10,
+      };
+    }
+    await updateTimelinePost(editingPost.id, updates);
+    setEditingPost(null);
+  }, [editingPost, editContent, editEventTitle, editEventDate, editEventHour, editEventMinute, editEventLocation, editEventMaxParticipants, updateTimelinePost, formatDateForStorage]);
+
   const renderPost = useCallback(
     ({ item }: { item: TimelinePost }) => (
       <MemoizedPostCard
@@ -979,12 +1042,13 @@ export default function TimelineScreen() {
         onComment={handleComment}
         onAuthorPress={handleAuthorPress}
         onImagePress={setExpandedImageUrl}
+        onEdit={handleEditPost}
         onDelete={deleteTimelinePost}
         isOwnPost={item.author.id === currentUserId || item.author.id === 'me'}
         language={language}
       />
     ),
-    [toggleLike, handleComment, handleAuthorPress, deleteTimelinePost, currentUserId, language]
+    [toggleLike, handleComment, handleAuthorPress, handleEditPost, deleteTimelinePost, currentUserId, language]
   );
 
   const keyExtractor = useCallback((item: TimelinePost, index: number) => item.id?.trim() || `post-${index}`, []);
@@ -1336,6 +1400,60 @@ export default function TimelineScreen() {
             <TextInput style={styles.modalInput} value={eventMaxParticipants} onChangeText={setEventMaxParticipants} keyboardType="number-pad" placeholderTextColor={colors.textMuted} />
             <Pressable onPress={handleCreateEvent} style={[styles.modalSubmitBtn, !eventTitle.trim() && { opacity: 0.5 }]} disabled={!eventTitle.trim()}>
               <Text style={styles.modalSubmitText}>{t('create_event', language)}</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={editingPost !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditingPost(null)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('edit_post_title', language)}</Text>
+            <Pressable onPress={() => setEditingPost(null)}><XIcon size={22} color={colors.textSecondary} /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.modalLabel}>{t('write_post', language)}</Text>
+            <TextInput
+              style={[styles.modalInput, { minHeight: 80, textAlignVertical: 'top' }]}
+              value={editContent}
+              onChangeText={setEditContent}
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+            {editingPost?.event && (
+              <>
+                <Text style={styles.modalLabel}>{t('event_title', language)}</Text>
+                <TextInput style={styles.modalInput} value={editEventTitle} onChangeText={setEditEventTitle} placeholderTextColor={colors.textMuted} />
+                <Text style={styles.modalLabel}>{t('event_date', language)}</Text>
+                <View style={[styles.pickerRow, { justifyContent: 'center', gap: 16 }]}>
+                  <Pressable onPress={() => setEditEventDate(prev => { const n = new Date(prev); n.setDate(n.getDate() - 1); return n; })} style={styles.pickerArrow}>
+                    <Text style={styles.pickerArrowText}>◀</Text>
+                  </Pressable>
+                  <Text style={styles.pickerValue}>{formatDateDisplay(editEventDate)}</Text>
+                  <Pressable onPress={() => setEditEventDate(prev => { const n = new Date(prev); n.setDate(n.getDate() + 1); return n; })} style={styles.pickerArrow}>
+                    <Text style={styles.pickerArrowText}>▶</Text>
+                  </Pressable>
+                </View>
+                <Text style={styles.modalLabel}>{t('event_time', language)}</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={`${String(editEventHour).padStart(2, '0')}:${String(editEventMinute).padStart(2, '0')}`}
+                  onChangeText={(v) => {
+                    const [h, m] = v.split(':').map(Number);
+                    if (!Number.isNaN(h)) setEditEventHour(Math.max(0, Math.min(23, h)));
+                    if (!Number.isNaN(m)) setEditEventMinute(Math.max(0, Math.min(59, m)));
+                  }}
+                  placeholder="HH:MM"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={styles.modalLabel}>{t('event_location', language)}</Text>
+                <TextInput style={styles.modalInput} value={editEventLocation} onChangeText={setEditEventLocation} placeholderTextColor={colors.textMuted} />
+                <Text style={styles.modalLabel}>{t('event_max_participants', language)}</Text>
+                <TextInput style={styles.modalInput} value={editEventMaxParticipants} onChangeText={setEditEventMaxParticipants} keyboardType="number-pad" placeholderTextColor={colors.textMuted} />
+              </>
+            )}
+            <Pressable onPress={handleSaveEdit} style={styles.modalSubmitBtn}>
+              <Text style={styles.modalSubmitText}>{t('save', language)}</Text>
             </Pressable>
           </ScrollView>
         </View>

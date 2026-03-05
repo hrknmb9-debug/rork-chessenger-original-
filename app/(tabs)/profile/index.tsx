@@ -66,7 +66,7 @@ const PROFILE_BIO_ITEM_ID = 'profile-bio';
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const { user, logout } = useAuth();
-  const { profile, language, accessToken } = useChess();
+  const { profile, language, accessToken, activeMatches } = useChess();
   const router = useRouter();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [hostedEvents, setHostedEvents] = useState<HostedEventWithParticipants[]>([]);
@@ -207,8 +207,8 @@ export default function ProfileScreen() {
       icon: <Star size={16} color={colors.accent} />,
     },
     {
-      label: t('matches', language) || 'Matches',
-      value: profile.gamesPlayed ?? '0',
+      label: t('tab_matches', language) || 'マッチ',
+      value: String(activeMatches?.length ?? 0),
       icon: <Swords size={16} color={colors.accent} />,
     },
   ];
@@ -397,13 +397,20 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Edit Profile Button */}
+        {/* Edit Profile + Favorites */}
         <View style={styles.actionSection}>
           <Pressable
             style={styles.editBtn}
             onPress={() => router.push('/edit-profile' as any)}
           >
             <Text style={styles.editBtnText}>{t('edit_profile', language)}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.favoritesBtn}
+            onPress={() => router.push('/profile/favorites' as any)}
+          >
+            <Star size={18} color={colors.accent} />
+            <Text style={styles.favoritesBtnText}>{t('favorites_tab', language)}</Text>
           </Pressable>
         </View>
 

@@ -66,7 +66,7 @@ export default function PlayerDetailScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { players, sendMatchRequest, language, blockUser, unblockUser, isUserBlocked, currentUserId, accessToken } = useChess();
+  const { players, sendMatchRequest, language, blockUser, unblockUser, isUserBlocked, currentUserId, accessToken, toggleFavorite, favoritePlayerIds } = useChess();
   const { userLocation } = useLocation();
   const router = useRouter();
   const [selectedTime, setSelectedTime] = useState('15+10');
@@ -80,6 +80,13 @@ export default function PlayerDetailScreen() {
   const player = useMemo(() => players.find(p => p.id === id), [players, id]);
   const winRate = useMemo(() => (player ? getWinRate(player.wins, player.gamesPlayed) : 0), [player]);
   const playerBlocked = useMemo(() => (id ? isUserBlocked(id) : false), [id, isUserBlocked]);
+  const isFavorite = useMemo(() => (id ? favoritePlayerIds.has(id) : false), [id, favoritePlayerIds]);
+
+  const handleToggleFavorite = useCallback(() => {
+    if (!id) return;
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    toggleFavorite(id);
+  }, [id, toggleFavorite]);
 
   const handleSendRequest = useCallback(() => {
     if (!player) return;
@@ -214,13 +221,18 @@ export default function PlayerDetailScreen() {
           headerTintColor: colors.textPrimary,
           headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerRight: () => (
-            <Pressable onPress={handleBlockToggle} style={styles.headerBlockBtn}>
-              {playerBlocked ? (
-                <ShieldCheck size={20} color={colors.green} />
-              ) : (
-                <ShieldBan size={20} color={colors.red} />
-              )}
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Pressable onPress={handleToggleFavorite} style={styles.headerBlockBtn}>
+                <Star size={20} color={isFavorite ? colors.gold : colors.textMuted} fill={isFavorite ? colors.gold : 'transparent'} />
+              </Pressable>
+              <Pressable onPress={handleBlockToggle} style={styles.headerBlockBtn}>
+                {playerBlocked ? (
+                  <ShieldCheck size={20} color={colors.green} />
+                ) : (
+                  <ShieldBan size={20} color={colors.red} />
+                )}
+              </Pressable>
+            </View>
           ),
         }}
       />

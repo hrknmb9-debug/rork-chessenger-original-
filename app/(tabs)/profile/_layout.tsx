@@ -21,6 +21,10 @@ export default function ProfileLayout() {
         name="index"
         options={{ title: t('tab_profile', language) }}
       />
+      <Stack.Screen
+        name="favorites"
+        options={{ title: t('favorites_tab', language) }}
+      />
     </Stack>
   );
 }
