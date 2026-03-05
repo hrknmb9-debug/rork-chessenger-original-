@@ -59,9 +59,17 @@
           "color": "#8B5CF6"
         }
       ],
+      "expo-av",
       "expo-font",
       "expo-web-browser",
-      "expo-camera"
+      "expo-camera",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "プロフィール写真やタイムライン投稿に使用します",
+          "cameraPermission": "プロフィール写真・タイムライン投稿の撮影に使用します"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

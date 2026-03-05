@@ -120,7 +120,7 @@ export default function SettingsScreen() {
                       if (error) throw error;
                       if (data?.error) throw new Error(data.error);
                       await logout();
-                      router.replace('/login' as any);
+                      // ナビゲーションは AuthProvider の SIGNED_OUT ハンドラに任せる
                     } catch (e) {
                       const msg = e instanceof Error ? e.message : String(e);
                       Alert.alert(

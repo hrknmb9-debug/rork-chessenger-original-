@@ -1424,7 +1424,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       setMatches(prev => [newMatch, ...prev]);
       console.log('Match request sent to', player.name, 'id:', matchId);
 
-      notifyMatchRequest(player.id, profile.name).catch(e =>
+      notifyMatchRequest(player.id, profile.name, profile.id).catch(e =>
         console.log('Push notification failed (non-blocking)', e)
       );
     } catch (e) {

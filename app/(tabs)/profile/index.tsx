@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   InteractionManager,
@@ -14,6 +13,7 @@ import {
   Share,
   Animated,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import {
@@ -76,7 +76,9 @@ export default function ProfileScreen() {
   const { user } = useAuth();
   const { profile, language, accessToken, activeMatches } = useChess();
   const router = useRouter();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const tabBarH = 68 + Math.max(insets.bottom, 8);
+  const styles = useMemo(() => createStyles(colors, tabBarH), [colors, tabBarH]);
   const [showQR, setShowQR] = useState(false);
   const [scanMode, setScanMode] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -613,7 +615,7 @@ export default function ProfileScreen() {
   );
 }
 
-function createStyles(colors: any) {
+function createStyles(colors: any, tabBarH = 140) {
   const cardShadow = Platform.select({
     ios: { shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
     android: { elevation: 3 },
@@ -639,7 +641,7 @@ function createStyles(colors: any) {
       justifyContent: 'center',
       ...(cardShadow ?? {}),
     },
-    scrollContent: { paddingBottom: 140 },
+    scrollContent: { paddingBottom: tabBarH + 24 },
 
     /* Profile top */
     profileInfo: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 20 },

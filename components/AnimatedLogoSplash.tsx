@@ -1,103 +1,103 @@
 /**
- * アプリ起動時のロゴ SVG アニメーション
- * チェスのポーンをアクティブにパルス・スケールで表現
+ * アプリ起動時のスプラッシュアニメーション
+ * アプリアイコン + "Chessenger" テキストをダイナミックに表示
  */
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated, Platform } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
-
-const LOGO_SIZE = 120;
-const ACCENT = '#2B9B50';
-const BG = '#FFFFFF';
-const DURATION_MS = 1500;
-
-// チェスのポーン（Material Design Icons ベース、viewBox 24x24）
-const PawnPath = () => (
-  <Path
-    d="M19 22H5V20H19V22M16 18H8L10.18 10H8V8H10.72L10.79 7.74C10.1 7.44 9.55 6.89 9.25 6.2C8.58 4.68 9.27 2.91 10.79 2.25C12.31 1.58 14.08 2.27 14.74 3.79C15.41 5.31 14.72 7.07 13.2 7.74L13.27 8H16V10H13.82L16 18Z"
-    fill={ACCENT}
-  />
-);
+import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
+import { Image } from 'expo-image';
 
 const useNativeDriver = Platform.OS !== 'web';
+const ICON_SIZE = 100;
+const BG = '#FFFFFF';
 
 export function AnimatedLogoSplash({ onComplete }: { onComplete?: () => void }) {
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const iconScale   = useRef(new Animated.Value(0.4)).current;
+  const iconOpacity = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const textY       = useRef(new Animated.Value(16)).current;
+  const dotScale    = useRef(new Animated.Value(0)).current;
+  const pulse       = useRef(new Animated.Value(1)).current;
+  const shimmer     = useRef(new Animated.Value(0)).current;
+  const screenOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // 登場: フェードイン + スケール
+    // 1) アイコン登場（spring）
     Animated.parallel([
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 8,
-        useNativeDriver,
-      }),
-    ]).start();
+      Animated.spring(iconScale,   { toValue: 1, tension: 60, friction: 7, useNativeDriver }),
+      Animated.timing(iconOpacity, { toValue: 1, duration: 350, useNativeDriver }),
+    ]).start(() => {
+      // 2) テキスト + ドット フェードイン
+      Animated.parallel([
+        Animated.timing(textOpacity, { toValue: 1, duration: 400, useNativeDriver }),
+        Animated.spring(textY,       { toValue: 0, speed: 14, bounciness: 6, useNativeDriver }),
+        Animated.spring(dotScale,    { toValue: 1, tension: 80, friction: 6, useNativeDriver }),
+      ]).start();
 
-    // パルスループ: 呼吸するような動き
-    const pulseLoop = () => {
+      // 3) アイコンのパルスループ
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.08,
-            duration: 800,
-            useNativeDriver,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0.96,
-            duration: 800,
-            useNativeDriver,
-          }),
-        ]),
-        { iterations: -1 }
+          Animated.timing(pulse, { toValue: 1.08, duration: 700, useNativeDriver }),
+          Animated.timing(pulse, { toValue: 0.95, duration: 700, useNativeDriver }),
+        ])
       ).start();
-    };
 
-    const t1 = setTimeout(pulseLoop, 450);
+      // 4) タイトルシマーループ（useNativeDriver 非対応の color は JS 側で）
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shimmer, { toValue: 1, duration: 1200, useNativeDriver: false }),
+          Animated.timing(shimmer, { toValue: 0, duration: 1200, useNativeDriver: false }),
+        ])
+      ).start();
+    });
 
-    // 指定時間後にフェードアウトして完了
-    const t2 = setTimeout(() => {
-      Animated.timing(opacityAnim, {
+    // 5) 一定時間後にフェードアウトして完了
+    const t = setTimeout(() => {
+      Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 300,
+        duration: 400,
         useNativeDriver,
-      }).start(() => {
-        onComplete?.();
-      });
-    }, DURATION_MS);
+      }).start(() => onComplete?.());
+    }, 1800);
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    return () => clearTimeout(t);
   }, [onComplete]);
 
-  const scaleInterpolate = Animated.multiply(scaleAnim, pulseAnim);
+  const titleColor = shimmer.interpolate({
+    inputRange:  [0, 0.5, 1],
+    outputRange: ['#18181B', '#22C55E', '#18181B'],
+  });
 
   return (
-    <View style={[styles.container, { pointerEvents: 'none' }]}>
+    <Animated.View style={[styles.container, { opacity: screenOpacity }]} pointerEvents="none">
+      {/* アイコン */}
       <Animated.View
         style={[
-          styles.logoWrap,
+          styles.iconWrap,
           {
-            opacity: opacityAnim,
-            transform: [{ scale: scaleInterpolate }],
+            opacity: iconOpacity,
+            transform: [{ scale: Animated.multiply(iconScale, pulse) }],
           },
         ]}
       >
-        <Svg width={LOGO_SIZE} height={LOGO_SIZE} viewBox="0 0 24 24">
-          <PawnPath />
-        </Svg>
+        <Image
+          source={require('@/assets/images/app-icon.png')}
+          style={styles.icon}
+          contentFit="cover"
+        />
       </Animated.View>
-    </View>
+
+      {/* Chessenger テキスト */}
+      <Animated.View style={{ opacity: textOpacity, transform: [{ translateY: textY }] }}>
+        <Animated.Text style={[styles.title, { color: titleColor }]}>
+          Chessenger
+        </Animated.Text>
+        <View style={styles.subtitleRow}>
+          <Animated.View style={[styles.dot, { transform: [{ scale: dotScale }] }]} />
+          <Text style={styles.subtitle}>Find your match</Text>
+          <Animated.View style={[styles.dot, { transform: [{ scale: dotScale }] }]} />
+        </View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -111,12 +111,48 @@ const styles = StyleSheet.create({
     backgroundColor: BG,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 20,
     zIndex: 9999,
   },
-  logoWrap: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
+  iconWrap: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE * 0.23,
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#22C55E',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.40,
+        shadowRadius: 20,
+      },
+      android: { elevation: 12 },
+    }),
+  },
+  icon: { width: ICON_SIZE, height: ICON_SIZE },
+  title: {
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1.2,
+    textAlign: 'center',
+  },
+  subtitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
 });

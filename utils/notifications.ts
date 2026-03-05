@@ -187,14 +187,14 @@ export async function getOpponentPushToken(opponentId: string): Promise<string |
   }
 }
 
-export async function notifyMatchRequest(opponentId: string, senderName: string): Promise<void> {
+export async function notifyMatchRequest(opponentId: string, senderName: string, senderId?: string): Promise<void> {
   const token = await getOpponentPushToken(opponentId);
   if (token) {
     await sendPushNotification(
       token,
       '対局リクエスト / Match Request',
       `${senderName}さんから対局リクエストが届きました`,
-      { type: 'match_request', senderId: opponentId }
+      { type: 'match_request', senderId: senderId ?? '' }
     );
   }
 }

@@ -159,7 +159,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         {Platform.OS === 'ios' ? (
           <BlurView
             intensity={72}
-            tint="light"
+            tint={isDark ? 'dark' : 'light'}
             style={[tabStyles.bar, { borderColor: colors.tabBarBorder }]}
           >
             {state.routes.map((route, index) => {

@@ -16,9 +16,9 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -370,6 +370,8 @@ export default function MatchDiscoverScreen() {
   const { user } = useAuth();
   const { sendMatchRequest, pendingIncoming } = useChess();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const tabBarH = 68 + Math.max(insets.bottom, 8);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const { profiles, loading, error, reload } = useDiscoverProfiles(user?.id);
@@ -583,7 +585,7 @@ export default function MatchDiscoverScreen() {
 
       {/* ─── スワイプヒント ── */}
       {!allSwiped && (
-        <Text style={[styles.hintText, { color: colors.textMuted }]}>
+        <Text style={[styles.hintText, { color: colors.textMuted, paddingBottom: tabBarH }]}>
           Swipe right to like · left to skip
         </Text>
       )}
@@ -802,7 +804,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // アクションボタン
+  // アクションボタン（タブバー分の余白は動的に付与するためここでは0）
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -817,7 +819,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 12,
     fontWeight: '500',
-    paddingBottom: 110,
+    paddingBottom: 16,
     opacity: 0.6,
   },
 

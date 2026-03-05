@@ -177,11 +177,12 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         setUser(null);
         await AsyncStorage.removeItem(AUTH_KEY);
         console.log('Auth: SIGNED_OUT - user cleared');
-        // initialLoadDone 後の SIGNED_OUT はセッション切れ → ログイン画面へ強制遷移
-        // push ではなく replace を使い、(tabs) がモーダルの裏に残らないようにする
+        // initialLoadDone 後の SIGNED_OUT はセッション切れ → ログイン画面へ push
+        // replace ではなく push を使い、(tabs) をスタックに残す
+        // （ログイン成功後に navigate で pop-to-root できるように）
         if (initialLoadDone.current) {
           try {
-            router.replace('/login' as any);
+            router.push('/login' as any);
           } catch (navErr) {
             console.log('Auth: Navigation to login failed', navErr);
           }
