@@ -1,4 +1,4 @@
-import React, { Component, useState, useEffect } from 'react';
+import React, { Component, useCallback, useEffect, useMemo, useState } from 'react';
 import { Image } from 'expo-image';
 import { StyleProp, ImageStyle } from 'react-native';
 
@@ -7,9 +7,9 @@ function makeFallback(name?: string): string {
   return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&size=200&background=4F46E5&color=fff&bold=true';
 }
 
-function toSrc(uri: string | null | undefined, fallback: string): string {
-  if (!uri || uri.trim() === '') return fallback;
-  if (uri.startsWith('file://') || uri.startsWith('ph://')) return fallback;
+function toDisplayUri(uri: string | null | undefined): string | null {
+  if (!uri || uri.trim() === '') return null;
+  if (uri.startsWith('file://') || uri.startsWith('ph://')) return null;
   return uri;
 }
 
@@ -53,49 +53,24 @@ class ImageErrorBoundary extends Component<
   }
 }
 
+/**
+ * チカチカ防止: HEAD リクエストによる事前検証をやめ、uri を直接表示。
+ * 失敗時のみ onError でフォールバックに切替（プレースホルダ→画像の切り替えを排除）
+ */
 export function SafeImage({ uri, name, style, contentFit = 'cover' }: SafeImageProps) {
-  const fallback = makeFallback(name);
-  const [src, setSrc] = useState(() => toSrc(uri, fallback));
-  const [verified, setVerified] = useState<boolean | null>(null);
+  const fallback = useMemo(() => makeFallback(name), [name]);
+  const displayUri = useMemo(() => toDisplayUri(uri) ?? fallback, [uri, fallback]);
+  const [errorFallback, setErrorFallback] = useState<string | null>(null);
 
   useEffect(() => {
-    const raw = toSrc(uri, fallback);
-    if (raw === fallback) {
-      setSrc(fallback);
-      setVerified(true);
-      return;
-    }
-    setVerified(null);
-    let cancelled = false;
-    fetch(raw, { method: 'HEAD' })
-      .then(res => {
-        if (cancelled) return;
-        if (res.ok) {
-          setSrc(raw);
-          setVerified(true);
-        } else {
-          setSrc(fallback);
-          setVerified(true);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSrc(fallback);
-          setVerified(true);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [uri, fallback]);
+    setErrorFallback(null);
+  }, [displayUri]);
 
-  if (verified === null) {
-    return (
-      <Image
-        source={{ uri: fallback }}
-        style={style}
-        contentFit={contentFit}
-      />
-    );
-  }
+  const handleError = useCallback(() => {
+    setErrorFallback(displayUri === fallback ? null : fallback);
+  }, [displayUri, fallback]);
+
+  const src = errorFallback ?? displayUri;
 
   return (
     <ImageErrorBoundary fallbackUri={fallback} style={style} contentFit={contentFit}>
@@ -103,7 +78,8 @@ export function SafeImage({ uri, name, style, contentFit = 'cover' }: SafeImageP
         source={{ uri: src }}
         style={style}
         contentFit={contentFit}
-        onError={() => setSrc(fallback)}
+        onError={handleError}
+        cachePolicy="memory-disk"
       />
     </ImageErrorBoundary>
   );
