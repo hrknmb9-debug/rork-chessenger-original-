@@ -18,6 +18,7 @@ import {
   InteractionManager,
 } from 'react-native';
 import { SafeImage } from '@/components/SafeImage';
+import { Image } from 'expo-image';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -1184,7 +1185,8 @@ export default function TimelineScreen() {
           />
           {postImageUrl && (
             <View style={styles.imagePreviewContainer}>
-              <SafeImage uri={postImageUrl} name="" style={styles.imagePreview} contentFit="cover" />
+              {/* file:// を SafeImage に渡すとブロックされアバターが表示されるため直接 Image を使用 */}
+              <Image source={{ uri: postImageUrl }} style={styles.imagePreview} contentFit="cover" />
               <Pressable onPress={() => { setPostImageUrl(null); setPostImageBase64(null); }} style={styles.removeImageBtn}>
                 <XIcon size={14} color={colors.white} />
               </Pressable>
