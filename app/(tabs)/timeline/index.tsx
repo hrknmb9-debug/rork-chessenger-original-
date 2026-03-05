@@ -526,7 +526,7 @@ function PostCard({
 
       {post.imageUrl && (
         <Pressable onPress={() => onImagePress?.(post.imageUrl!)} style={{ marginBottom: 12 }}>
-          <Image source={{ uri: post.imageUrl }} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: colors.surfaceLight }} contentFit="cover" />
+          <SafeImage uri={post.imageUrl} name={post.author.name} style={{ width: '100%', height: 200, borderRadius: 12, backgroundColor: colors.surfaceLight }} contentFit="cover" />
         </Pressable>
       )}
 
@@ -923,7 +923,7 @@ export default function TimelineScreen() {
           />
           {postImageUrl && (
             <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: postImageUrl }} style={styles.imagePreview} contentFit="cover" />
+              <SafeImage uri={postImageUrl} name="" style={styles.imagePreview} contentFit="cover" />
               <Pressable onPress={() => setPostImageUrl(null)} style={styles.removeImageBtn}>
                 <XIcon size={14} color={colors.white} />
               </Pressable>
@@ -1204,7 +1204,7 @@ export default function TimelineScreen() {
         <Pressable style={expandedImageStyles.backdrop} onPress={() => setExpandedImageUrl(null)}>
           {expandedImageUrl ? (
             <Pressable style={expandedImageStyles.imageContainer} onPress={e => e.stopPropagation()}>
-              <Image source={{ uri: expandedImageUrl }} style={expandedImageStyles.image} contentFit="contain" />
+              <SafeImage uri={expandedImageUrl} name="" style={expandedImageStyles.image} contentFit="contain" />
             </Pressable>
           ) : null}
           <Pressable style={[expandedImageStyles.closeBtn, { backgroundColor: colors.surface }]} onPress={() => setExpandedImageUrl(null)}>

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { SafeImage } from '@/components/SafeImage';
 import { Send, Image as ImageIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -363,8 +364,9 @@ export default function ChatScreen() {
           ]}
         >
           {!isMe && chatPlayer ? (
-            <Image
-              source={{ uri: chatPlayer.avatar }}
+            <SafeImage
+              uri={chatPlayer.avatar}
+              name={chatPlayer.name}
               style={styles.messageBubbleAvatar}
               contentFit="cover"
             />
@@ -377,8 +379,9 @@ export default function ChatScreen() {
             ]}
           >
             {isImg && imgUri && isLoadableImageUrl(imgUri) ? (
-              <Image
-                source={{ uri: imgUri }}
+              <SafeImage
+                uri={imgUri}
+                name=""
                 style={styles.imageMessage}
                 contentFit="cover"
               />
@@ -445,8 +448,9 @@ export default function ChatScreen() {
               onPress={() => router.push(('/player/' + chatPlayer.id) as any)}
               style={styles.headerTitle}
             >
-              <Image
-                source={{ uri: chatPlayer.avatar }}
+              <SafeImage
+                uri={chatPlayer.avatar}
+                name={chatPlayer.name}
                 style={styles.headerAvatar}
                 contentFit="cover"
               />

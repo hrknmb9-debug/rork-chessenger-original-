@@ -384,7 +384,7 @@ function MessageBubble({
         >
           {(isImage || imageUrl) && imageUrl && isLoadableImageUrl(imageUrl) ? (
             <Pressable onPress={() => onImagePress?.(imageUrl)} style={styles.imageMessageWrap}>
-              <Image source={{ uri: imageUrl }} style={styles.imageMessage} contentFit="cover" />
+              <SafeImage uri={imageUrl} name="" style={styles.imageMessage} contentFit="cover" />
             </Pressable>
           ) : (isImage || imageUrl) && imageUrl ? (
             <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextOther]}>📷 画像</Text>
@@ -871,8 +871,9 @@ export default function ChatScreen() {
         >
           {expandedImageUrl ? (
             <Pressable style={expandedImageStyles.imageContainer} onPress={e => e.stopPropagation()}>
-              <Image
-                source={{ uri: expandedImageUrl }}
+              <SafeImage
+                uri={expandedImageUrl}
+                name=""
                 style={expandedImageStyles.image}
                 contentFit="contain"
               />

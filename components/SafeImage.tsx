@@ -9,6 +9,7 @@ function makeFallback(name?: string): string {
 
 function toSrc(uri: string | null | undefined, fallback: string): string {
   if (!uri || uri.trim() === '') return fallback;
+  if (uri.startsWith('file://') || uri.startsWith('ph://')) return fallback;
   return uri;
 }
 

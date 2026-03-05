@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
+import { SafeImage } from '@/components/SafeImage';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, MapPin, Clock, FileText, X, Check, Trophy, Flag, ChevronRight, Search } from 'lucide-react-native';
@@ -174,12 +175,13 @@ export default function EditProfileScreen() {
     const parsedChessCom = chessComRating.trim() ? parseInt(chessComRating, 10) : null;
     const parsedLichess = lichessRating.trim() ? parseInt(lichessRating, 10) : null;
     const mainRating = parsedChessCom ?? parsedLichess ?? 0;
+    const avatarToSave = avatar.startsWith('file://') || avatar.startsWith('ph://') ? profile.avatar ?? '' : avatar;
 
     const success = await updateProfile({
       name,
       bio,
       location,
-      avatar,
+      avatar: avatarToSave,
       skillLevel,
       preferredTimeControl: timeControl,
       chessComRating: parsedChessCom !== null && !isNaN(parsedChessCom) ? parsedChessCom : null,
@@ -191,7 +193,7 @@ export default function EditProfileScreen() {
 
     if (success) {
       try {
-        await updateAuthProfile({ name, avatar });
+        await updateAuthProfile({ name, avatar: avatarToSave });
       } catch (authErr) {
         console.log('EditProfile: updateAuthProfile failed (non-blocking)', authErr);
       }
@@ -267,7 +269,7 @@ export default function EditProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <Pressable onPress={handlePickAvatar} style={styles.avatarSection} disabled={isUploadingAvatar}>
-          <Image source={{ uri: avatar }} style={styles.avatar} contentFit="cover" />
+          <SafeImage uri={avatar} name={name} style={styles.avatar} contentFit="cover" />
           <View style={styles.cameraOverlay}>
             {isUploadingAvatar ? (
               <ActivityIndicator size="small" color={colors.white} />

@@ -1,6 +1,6 @@
 import React, { useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, Platform } from 'react-native';
-import { Image } from 'expo-image';
+import { SafeImage } from '@/components/SafeImage';
 import { MapPin, Clock, Check, X, Trophy, Minus } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -115,7 +115,7 @@ function MatchCardComponent({ match, onAccept, onDecline, onPress, language = 'j
         testID={`match-card-${match.id}`}
       >
         <View style={styles.header}>
-          <Image source={{ uri: match.opponent.avatar }} style={styles.avatar} contentFit="cover" />
+          <SafeImage uri={match.opponent.avatar} name={match.opponent.name} style={styles.avatar} contentFit="cover" />
           <View style={styles.info}>
             <View style={styles.nameRow}>
               <Text style={styles.name} numberOfLines={1}>{match.opponent.name}</Text>
