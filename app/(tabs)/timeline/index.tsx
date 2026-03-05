@@ -898,7 +898,7 @@ export default function TimelineScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         quality: 0.8,
         base64: true,
