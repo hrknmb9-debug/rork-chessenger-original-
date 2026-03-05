@@ -191,7 +191,8 @@ function detectSourceLang(text: string): string {
   if (/[\u0980-\u09FF]/.test(text)) return 'bn';
   if (/[\u4E00-\u9FFF]/.test(text) && !/[\u3040-\u309F]/.test(text)) return 'zh';
   if (/[\u0600-\u06FF]/.test(text)) return 'ar';
-  return 'en';
+  // 未検出時は auto で Google API に自動判定させる（MyMemory は Edge 側で en にフォールバック）
+  return 'auto';
 }
 
 type CacheEntry = { translated: string; target: string; source: string; v: number };
@@ -608,7 +609,7 @@ async function translateViaMyMemory(text: string, targetLang: string, sourceLang
  * テキストを翻訳する（キャッシュ付き）
  * @param text 翻訳するテキスト
  * @param targetLang 翻訳先言語（設定で選択した言語、ja/en/zh/ko 等）
- * @param accessToken 未使用（supabase クライアントが自動でトークンを使用）
+ * @param accessToken Bearer トークン（未指定時は anon key を使用）
  */
 export async function translateText(
   text: string,

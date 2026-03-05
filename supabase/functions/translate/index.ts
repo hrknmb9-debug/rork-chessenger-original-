@@ -51,7 +51,9 @@ async function translateGoogle(text: string, target: string, source: string, api
 
 async function translateMyMemory(text: string, target: string, source: string): Promise<string | null> {
   try {
-    const langpair = `${source}|${target}`;
+    // MyMemory は auto 非対応のため、auto の場合は en を使用
+    const effectiveSource = source === 'auto' ? 'en' : source;
+    const langpair = `${effectiveSource}|${target}`;
     const encoded = encodeURIComponent(text.slice(0, 500));
     const url = `https://api.mymemory.translated.net/get?q=${encoded}&langpair=${langpair}`;
     const res = await fetch(url);
@@ -69,7 +71,15 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown> ?? {};
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders } }
+      );
+    }
     const text = body?.text;
     const targetLang = body?.targetLang;
     const sourceLang = body?.sourceLang;
@@ -79,8 +89,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders } }
       );
     }
-    const target = normalizeLang(targetLang ?? 'en');
-    const source = normalizeLang(sourceLang ?? 'auto');
+    const target = normalizeLang(typeof targetLang === 'string' ? targetLang : 'en');
+    const source = normalizeLang(typeof sourceLang === 'string' ? sourceLang : 'auto');
     const apiKey = Deno.env.get('GOOGLE_TRANSLATE_API_KEY');
     let translated: string | null = null;
     if (apiKey) {
