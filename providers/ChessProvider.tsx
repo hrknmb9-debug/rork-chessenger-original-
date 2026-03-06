@@ -640,11 +640,11 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           }
         }
 
-        const safeUserId = userId ?? 'no-user';
-        const { data: nearbyProfiles, error: nearbyError } = await supabaseNoAuth
-          .from('profiles')
-          .select('*')
-          .neq('id', safeUserId);
+        let profilesQuery = supabaseNoAuth.from('profiles').select('*');
+        if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+          profilesQuery = profilesQuery.neq('id', userId);
+        }
+        const { data: nearbyProfiles, error: nearbyError } = await profilesQuery;
 
         if (nearbyProfiles && !nearbyError && nearbyProfiles.length > 0) {
           const userLat = userLocation?.latitude;

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, AppState } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import { Coordinates } from '@/types';
 import { supabase, supabaseNoAuth } from '@/utils/supabaseClient';
@@ -147,10 +147,18 @@ export const [LocationProvider, useLocation] = createContextHook(() => {
   }, [locationEnabled, requestLocation]);
 
   useEffect(() => {
-    if (locationEnabled) {
-      requestLocation();
-    }
-  }, []);
+    if (!locationEnabled) return;
+    const tryRequest = () => {
+      if (AppState.currentState === 'active') {
+        requestLocation();
+      }
+    };
+    tryRequest();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tryRequest();
+    });
+    return () => sub.remove();
+  }, [locationEnabled, requestLocation]);
 
   return {
     userLocation,
