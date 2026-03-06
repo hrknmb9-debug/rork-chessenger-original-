@@ -273,8 +273,7 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         setTimelinePosts([]);
         setNotifications([]);
         setBlockedUsers([]);
-        setFavoritePlayerIds(new Set());
-        setFavoritePlayers([]);
+        // favorites はクリアしない（Invalid Refresh Token 時も保持、再ログイン時に refreshFavorites で上書き）
         profileCacheRef.current.clear();
         eventCacheRef.current.clear();
         AsyncStorage.removeItem(EVENT_CACHE_KEY).catch(() => {});
@@ -2434,13 +2433,45 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       await AsyncStorage.setItem(FAVORITES_CACHE_KEY, JSON.stringify(list));
     } catch (e) {
       console.log('ChessProvider: refreshFavorites failed', e);
+      // API 失敗時はキャッシュから復元を試みる
+      try {
+        const cached = await AsyncStorage.getItem(FAVORITES_CACHE_KEY);
+        if (cached) {
+          const list = JSON.parse(cached) as Player[];
+          if (Array.isArray(list) && list.length > 0) {
+            setFavoritePlayers(list);
+            setFavoritePlayerIds(new Set(list.map((p) => p.id)));
+          }
+        }
+      } catch { /* ignore */ }
     }
   }, [userLocation?.latitude, userLocation?.longitude]);
 
-  // 再ログイン時に favorites を復元（SIGNED_OUT でクリアされるため）
+  // 再ログイン時: キャッシュから即時復元してから API で更新（消えないように）
   useEffect(() => {
-    if (currentUserId && currentUserId !== 'me') refreshFavorites();
+    if (!currentUserId || currentUserId === 'me') return;
+    AsyncStorage.getItem(FAVORITES_CACHE_KEY)
+      .then((cached) => {
+        if (cached) {
+          try {
+            const list = JSON.parse(cached) as Player[];
+            if (Array.isArray(list) && list.length > 0) {
+              setFavoritePlayers(list);
+              setFavoritePlayerIds(new Set(list.map((p) => p.id)));
+            }
+          } catch { /* ignore */ }
+        }
+        return refreshFavorites();
+      })
+      .catch(() => refreshFavorites());
   }, [currentUserId, refreshFavorites]);
+
+  // favorites 変更のたびにキャッシュへ保存（toggleFavorite や復元後も即時永続化、空でも保存）
+  useEffect(() => {
+    if (currentUserId && currentUserId !== 'me') {
+      AsyncStorage.setItem(FAVORITES_CACHE_KEY, JSON.stringify(favoritePlayers)).catch(() => {});
+    }
+  }, [currentUserId, favoritePlayers]);
 
   const toggleFavorite = useCallback(async (playerId: string) => {
     const { data: { user } } = await supabase.auth.getUser();

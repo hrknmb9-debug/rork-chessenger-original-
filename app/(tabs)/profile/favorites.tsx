@@ -21,8 +21,9 @@ import { getSkillLabel, formatDistance } from '@/utils/helpers';
 export default function FavoritesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { favoritePlayers, refreshFavorites, toggleFavorite, language } = useChess();
+  const { favoritePlayers, refreshFavorites, toggleFavorite, language, currentUserId } = useChess();
   const { user } = useAuth();
+  const canShowFavorites = !!(user?.id ?? currentUserId);
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -34,11 +35,11 @@ export default function FavoritesScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (user?.id) refreshFavorites();
-    }, [user?.id, refreshFavorites])
+      if (canShowFavorites) refreshFavorites();
+    }, [canShowFavorites, refreshFavorites])
   );
 
-  if (!user?.id) {
+  if (!canShowFavorites) {
     return (
       <View style={styles.center}>
         <Text style={[styles.emptyText, { color: colors.textMuted }]}>{t('login_prompt_desc', language)}</Text>
