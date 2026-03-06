@@ -9,6 +9,7 @@ import {
   Switch,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import {
@@ -34,6 +35,7 @@ import {
   MapPinOff,
   LogOut,
   UserX,
+  Flag,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { ThemeColors } from '@/constants/colors';
@@ -43,6 +45,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useLocation } from '@/providers/LocationProvider';
 import { supabase } from '@/utils/supabaseClient';
 import { t } from '@/utils/translations';
+import { Linking } from 'react-native';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { BackNavButton } from '@/components/BackNavButton';
 
@@ -71,6 +74,12 @@ export default function SettingsScreen() {
     Haptics.selectionAsync();
     toggleLocationEnabled();
   }, [toggleLocationEnabled]);
+
+  const handleReport = useCallback(() => {
+    Haptics.selectionAsync();
+    const subject = encodeURIComponent(language === 'ja' ? '【CHESSENGER 通報】' : '【CHESSENGER Report】');
+    Linking.openURL(`mailto:chessenger.co.ltd@gmail.com?subject=${subject}`);
+  }, [language]);
 
   const handleLogout = useCallback(() => {
     Alert.alert(

@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Match, MatchStatus, MatchRating, Player, UserProfile, TimelinePost, TimelineComment, TimelineEvent, MatchResultReport, AppNotification, SkillLevel, PlayStyle } from '@/types';
 
 import { useLocation, calculateDistance } from '@/providers/LocationProvider';
-import { Language, isRTL, SUPPORTED_LANGUAGES } from '@/utils/translations';
+import { Language, isRTL, SUPPORTED_LANGUAGES, t } from '@/utils/translations';
 import { supabase, supabaseNoAuth, clearStaleSession } from '@/utils/supabaseClient';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
 import {
@@ -2276,7 +2277,8 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     postId: string,
     updates: { content?: string; imageUrl?: string; event?: Partial<{ title: string; date: string; time: string; location: string; maxParticipants: number; deadlineAt?: string | null }> }
   ) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     setTimelinePosts(prev =>
@@ -2298,10 +2300,12 @@ export const [ChessProvider, useChess] = createContextHook(() => {
 
     try {
       if (updates.content !== undefined) {
-        await supabase.from('posts').update({ content: updates.content }).eq('id', postId).eq('user_id', user.id);
+        const { error } = await supabase.from('posts').update({ content: updates.content }).eq('id', postId).eq('user_id', user.id);
+        if (error) throw error;
       }
       if (updates.imageUrl !== undefined) {
-        await supabase.from('posts').update({ image_url: updates.imageUrl }).eq('id', postId).eq('user_id', user.id);
+        const { error } = await supabase.from('posts').update({ image_url: updates.imageUrl }).eq('id', postId).eq('user_id', user.id);
+        if (error) throw error;
       }
       if (updates.event) {
         const { data: evRow } = await supabase.from('events').select('id').eq('post_id', postId).maybeSingle();
@@ -2314,14 +2318,18 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           if (updates.event.maxParticipants !== undefined) eventUpdate.max_participants = updates.event.maxParticipants;
           if (updates.event.deadlineAt !== undefined) eventUpdate.deadline_at = updates.event.deadlineAt;
           if (Object.keys(eventUpdate).length > 0) {
-            await supabase.from('events').update(eventUpdate).eq('id', evRow.id);
+            const { error } = await supabase.from('events').update(eventUpdate).eq('id', evRow.id);
+            if (error) throw error;
           }
         }
       }
+      await refreshTimeline();
     } catch (e) {
-      console.log('ChessProvider: Post update failed', e);
+      console.warn('ChessProvider: Post update failed', e);
+      await refreshTimeline();
+      Alert.alert(t('error', language), t('edit_failed_relogin', language));
     }
-  }, []);
+  }, [refreshTimeline, language]);
 
   const deleteTimelinePost = useCallback(async (postId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
