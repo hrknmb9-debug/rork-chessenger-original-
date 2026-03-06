@@ -126,6 +126,7 @@ export default function HelpSupportScreen() {
               <Text style={styles.contactValue}>{t('support_email_address', language)}</Text>
             </View>
           </Pressable>
+          <Text style={[styles.reportNote, { color: colors.textMuted }]}>{t('report_email_note', language)}</Text>
         </View>
 
         <View style={styles.bottomSpacer} />
@@ -247,6 +248,12 @@ function createStyles(colors: ThemeColors) {
       fontSize: 16,
       fontWeight: '600' as const,
       color: colors.blue,
+    },
+    reportNote: {
+      fontSize: 13,
+      lineHeight: 20,
+      marginTop: 12,
+      marginHorizontal: 4,
     },
     bottomSpacer: {
       height: 40,
