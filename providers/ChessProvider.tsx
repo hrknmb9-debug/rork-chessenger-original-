@@ -2419,6 +2419,11 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
   }, [userLocation?.latitude, userLocation?.longitude]);
 
+  // 再ログイン時に favorites を復元（SIGNED_OUT でクリアされるため）
+  useEffect(() => {
+    if (currentUserId && currentUserId !== 'me') refreshFavorites();
+  }, [currentUserId, refreshFavorites]);
+
   const toggleFavorite = useCallback(async (playerId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user || playerId === user.id) return;
