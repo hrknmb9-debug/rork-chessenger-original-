@@ -38,6 +38,14 @@ async function getNativeLocation(): Promise<Coordinates> {
   };
 }
 
+/** プライバシー保護のため座標を約1.1km精度に丸める（過度な位置特定を防止） */
+export function roundCoordinatesForPrivacy(coords: Coordinates): Coordinates {
+  return {
+    latitude: Math.round(coords.latitude * 100) / 100,
+    longitude: Math.round(coords.longitude * 100) / 100,
+  };
+}
+
 export function calculateDistance(
   lat1: number,
   lon1: number,
@@ -64,16 +72,17 @@ async function saveLocationToSupabase(coords: Coordinates): Promise<void> {
       console.log('Location: No authenticated user, skipping Supabase save');
       return;
     }
+    const rounded = roundCoordinatesForPrivacy(coords);
     const { error } = await supabaseNoAuth.from('profiles').upsert({
       id: user.id,
-      latitude: coords.latitude,
-      longitude: coords.longitude,
+      latitude: rounded.latitude,
+      longitude: rounded.longitude,
       location_updated_at: new Date().toISOString(),
     });
     if (error) {
       console.log('Location: Supabase save error', error.message);
     } else {
-      console.log('Location: Saved to Supabase', coords.latitude.toFixed(4), coords.longitude.toFixed(4));
+      console.log('Location: Saved to Supabase (rounded)', rounded.latitude, rounded.longitude);
     }
   } catch (e) {
     console.log('Location: Supabase save failed (non-blocking)', e);

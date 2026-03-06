@@ -4,7 +4,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Match, MatchStatus, MatchRating, Player, UserProfile, TimelinePost, TimelineComment, TimelineEvent, MatchResultReport, AppNotification, SkillLevel, PlayStyle } from '@/types';
 
-import { useLocation, calculateDistance } from '@/providers/LocationProvider';
+import { useLocation, calculateDistance, roundCoordinatesForPrivacy } from '@/providers/LocationProvider';
 import { Language, isRTL, SUPPORTED_LANGUAGES, t } from '@/utils/translations';
 import { supabase, supabaseNoAuth, clearStaleSession } from '@/utils/supabaseClient';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
@@ -161,9 +161,10 @@ interface SupabaseNotification {
 function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, userLon?: number): Player {
   const lat = profile.latitude ?? 0;
   const lon = profile.longitude ?? 0;
+  const rounded = lat !== 0 || lon !== 0 ? roundCoordinatesForPrivacy({ latitude: lat, longitude: lon }) : { latitude: 0, longitude: 0 };
   let distance = 999;
   if (userLat && userLon && lat !== 0 && lon !== 0) {
-    distance = Math.round(calculateDistance(userLat, userLon, lat, lon) * 10) / 10;
+    distance = Math.round(calculateDistance(userLat, userLon, rounded.latitude, rounded.longitude) * 10) / 10;
   }
 
   return {
@@ -185,7 +186,7 @@ function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, use
     bioEn: '',
     preferredTimeControl: profile.preferred_time_control ?? '15+10',
     location: profile.location ?? '',
-    coordinates: { latitude: lat, longitude: lon },
+    coordinates: rounded,
     languages: profile.languages ?? [],
     country: profile.country,
     playStyles: (profile.play_styles as PlayStyle[]) ?? [],
