@@ -263,6 +263,14 @@ export default function HomeScreen() {
       return;
     }
     if (data) {
+      if (__DEV__ && data.length > 0) {
+        const first = data[0] as Record<string, unknown>;
+        console.log('[Home] profiles_with_match_stats sample:', {
+          games_played: first.games_played,
+          hasKey: 'games_played' in first,
+          keys: Object.keys(first).filter(k => k.includes('game') || k.includes('win') || k.includes('loss') || k.includes('draw')),
+        });
+      }
       const userLat = userLocation?.latitude;
       const userLon = userLocation?.longitude;
       const mapped = (data as SupabaseProfile[]).map(p => mapProfile(p, userLat, userLon));

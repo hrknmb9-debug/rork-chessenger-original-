@@ -694,6 +694,13 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           console.warn('[ChessProvider] loadSupabaseData profiles_with_match_stats failed:', nearbyError.message, 'code:', nearbyError.code);
         }
         if (nearbyProfiles && !nearbyError && nearbyProfiles.length > 0) {
+          if (__DEV__ && nearbyProfiles.length > 0) {
+            const first = nearbyProfiles[0] as Record<string, unknown>;
+            console.log('[ChessProvider] profiles_with_match_stats sample:', {
+              games_played: first.games_played,
+              hasKey: 'games_played' in first,
+            });
+          }
           const userLat = userLocation?.latitude;
           const userLon = userLocation?.longitude;
           const converted = nearbyProfiles.map((p: SupabaseProfile) =>

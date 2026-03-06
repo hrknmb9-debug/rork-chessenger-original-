@@ -38,7 +38,7 @@ import { useChess } from '@/providers/ChessProvider';
 import { Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
-import { getCountryFlag, getCountryName } from '@/utils/translations';
+import { t, getCountryFlag, getCountryName } from '@/utils/translations';
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -122,21 +122,31 @@ function useDiscoverProfiles(currentUserId: string | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!currentUserId) return;
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
+      let query = supabase
         .from('profiles_with_match_stats')
         .select(
           'id, name, avatar, location, country, skill_level, rating, chess_com_rating, play_styles, preferred_time_control, bio, games_played, wins, losses, draws'
         )
-        .neq('id', currentUserId)
         .limit(30);
+      if (currentUserId) {
+        query = query.neq('id', currentUserId);
+      }
+      const { data, error: err } = await query;
 
       if (err) {
         console.warn('[Matches] profiles_with_match_stats error:', err.message, 'code:', err.code);
         throw err;
+      }
+
+      if (__DEV__ && (data ?? []).length > 0) {
+        const first = (data ?? [])[0] as Record<string, unknown>;
+        console.log('[Matches] profiles_with_match_stats sample:', {
+          games_played: first?.games_played,
+          hasKey: first ? 'games_played' in first : false,
+        });
       }
 
       const shuffled: DiscoverProfile[] = (data ?? [])
@@ -228,6 +238,7 @@ interface SwipeCardProps {
   panHandlers: any;
   likeOpacity: Animated.AnimatedInterpolation<number>;
   nopeOpacity: Animated.AnimatedInterpolation<number>;
+  language?: string;
 }
 
 const SwipeCard = memo(function SwipeCard({
@@ -237,6 +248,7 @@ const SwipeCard = memo(function SwipeCard({
   panHandlers,
   likeOpacity,
   nopeOpacity,
+  language = 'ja',
 }: SwipeCardProps) {
   const rotate = pan.x.interpolate({
     inputRange: [-SCREEN_W / 2, 0, SCREEN_W / 2],
@@ -314,6 +326,10 @@ const SwipeCard = memo(function SwipeCard({
         {profile.preferredTimeControl ? (
           <Text style={styles.timeControlText}>⏱ {profile.preferredTimeControl}</Text>
         ) : null}
+
+        <Text style={styles.timeControlText}>
+          ⚔ {(profile.games_played ?? 0)} {t('tab_matches', language)}
+        </Text>
 
         {chips.length > 0 && (
           <View style={styles.chipsRow}>
@@ -567,6 +583,7 @@ export default function MatchDiscoverScreen() {
               panHandlers={panResponder.panHandlers}
               likeOpacity={likeOpacity}
               nopeOpacity={nopeOpacity}
+              language={language}
             />
           </>
         )}
