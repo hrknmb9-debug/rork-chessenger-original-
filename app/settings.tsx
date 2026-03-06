@@ -45,7 +45,6 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useLocation } from '@/providers/LocationProvider';
 import { supabase } from '@/utils/supabaseClient';
 import { t } from '@/utils/translations';
-import { Linking } from 'react-native';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { BackNavButton } from '@/components/BackNavButton';
 
