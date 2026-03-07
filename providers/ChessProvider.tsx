@@ -376,6 +376,10 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         return null;
       }
       if (data) {
+        if (__DEV__) {
+          const gp = data.games_played ?? '?';
+          console.log('ChessProvider: fetchPlayerProfile', userId, 'games_played=', gp, 'raw=', data.games_played);
+        }
         const player = supabaseProfileToPlayer(data, userLocation?.latitude, userLocation?.longitude);
         profileCacheRef.current.set(userId, player);
         return player;
