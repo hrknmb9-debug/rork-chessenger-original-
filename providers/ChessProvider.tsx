@@ -1533,15 +1533,17 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       // 常に相手（match.opponent.id）に通知を送る
       const opponentId = match?.opponent?.id;
       if (opponentId) {
-        // DB通知
-        supabase.from('notifications').insert({
-          user_id: opponentId,
-          type: accept ? 'match_accepted' : 'match_declined',
-          content: accept
-            ? `${profile.name}が対局リクエストを承諾しました`
-            : `${profile.name}が対局リクエストを辞退しました`,
-          related_id: matchId,
-        }).catch(() => {});
+        // DB通知（fire-and-forget、失敗時は無視）
+        Promise.resolve(
+          supabase.from('notifications').insert({
+            user_id: opponentId,
+            type: accept ? 'match_accepted' : 'match_declined',
+            content: accept
+              ? `${profile.name}が対局リクエストを承諾しました`
+              : `${profile.name}が対局リクエストを辞退しました`,
+            related_id: matchId,
+          })
+        ).catch(() => {});
         // プッシュ通知
         notifyMatchResponse(opponentId, profile.name, accept)
           .catch(e => console.log('Push notification failed (non-blocking)', e));
