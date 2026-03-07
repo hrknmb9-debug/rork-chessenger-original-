@@ -365,25 +365,38 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     }
 
     try {
-      const { data, error } = await supabaseNoAuth
-        .from('profiles_with_match_stats')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      // profiles から基本データ + RPC でマッチ集計（ビューに依存せず SECURITY DEFINER を直接呼ぶ）
+      const [profileRes, statsRes] = await Promise.all([
+        supabaseNoAuth.from('profiles').select('*').eq('id', userId).maybeSingle(),
+        supabaseNoAuth.rpc('get_profile_match_stats', { p_profile_id: userId }),
+      ]);
 
-      if (error) {
-        if (__DEV__) console.warn('ChessProvider: fetchPlayerProfile error', userId, error.code, error.message);
+      const { data: profileData, error: profileError } = profileRes;
+      const { data: statsRows, error: statsError } = statsRes;
+
+      if (profileError || !profileData) {
+        if (__DEV__) console.warn('ChessProvider: fetchPlayerProfile error', userId, profileError?.code, profileError?.message);
         return null;
       }
-      if (data) {
-        if (__DEV__) {
-          const gp = data.games_played ?? '?';
-          console.log('ChessProvider: fetchPlayerProfile', userId, 'games_played=', gp, 'raw=', data.games_played);
-        }
-        const player = supabaseProfileToPlayer(data, userLocation?.latitude, userLocation?.longitude);
-        profileCacheRef.current.set(userId, player);
-        return player;
+
+      const stats = statsError || !statsRows?.length
+        ? { games_played: 0, wins: 0, losses: 0, draws: 0 }
+        : (statsRows[0] as { games_played: number; wins: number; losses: number; draws: number });
+
+      const merged: SupabaseProfile = {
+        ...profileData,
+        games_played: stats.games_played ?? 0,
+        wins: stats.wins ?? 0,
+        losses: stats.losses ?? 0,
+        draws: stats.draws ?? 0,
+      };
+
+      if (__DEV__) {
+        console.log('ChessProvider: fetchPlayerProfile', userId, 'games_played=', merged.games_played, 'from RPC');
       }
+      const player = supabaseProfileToPlayer(merged, userLocation?.latitude, userLocation?.longitude);
+      profileCacheRef.current.set(userId, player);
+      return player;
     } catch (e) {
       if (__DEV__) console.warn('ChessProvider: fetchPlayerProfile failed for', userId, e);
     }
@@ -689,16 +702,26 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           }
         }
 
-        let profilesQuery = supabaseNoAuth.from('profiles_with_match_stats').select('*');
+        let profilesQuery = supabaseNoAuth.from('profiles').select('*');
         if (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
           profilesQuery = profilesQuery.neq('id', userId);
         }
-        const { data: nearbyProfiles, error: nearbyError } = await profilesQuery;
+        const { data: profileRows, error: nearbyError } = await profilesQuery;
 
         if (nearbyError && __DEV__) {
-          console.warn('ChessProvider: profiles_with_match_stats load error', nearbyError.code, nearbyError.message);
+          console.warn('ChessProvider: profiles load error', nearbyError.code, nearbyError.message);
         }
-        if (nearbyProfiles && !nearbyError && nearbyProfiles.length > 0) {
+        if (profileRows && !nearbyError && profileRows.length > 0) {
+          const ids = profileRows.map((p: { id: string }) => p.id);
+          const { data: statsRows } = await supabaseNoAuth.rpc('get_profile_match_stats_batch', { p_profile_ids: ids });
+          const statsMap = new Map<string, { games_played: number; wins: number; losses: number; draws: number }>();
+          (statsRows ?? []).forEach((r: { profile_id: string; games_played: number; wins: number; losses: number; draws: number }) => {
+            statsMap.set(r.profile_id, { games_played: r.games_played ?? 0, wins: r.wins ?? 0, losses: r.losses ?? 0, draws: r.draws ?? 0 });
+          });
+          const nearbyProfiles: SupabaseProfile[] = profileRows.map((p: Record<string, unknown>) => {
+            const s = statsMap.get(p.id as string) ?? { games_played: 0, wins: 0, losses: 0, draws: 0 };
+            return { ...p, games_played: s.games_played, wins: s.wins, losses: s.losses, draws: s.draws } as SupabaseProfile;
+          });
           const userLat = userLocation?.latitude;
           const userLon = userLocation?.longitude;
           const converted = nearbyProfiles.map((p: SupabaseProfile) =>
@@ -1320,16 +1343,26 @@ export const [ChessProvider, useChess] = createContextHook(() => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: nearbyProfiles, error } = await supabaseNoAuth
-        .from('profiles_with_match_stats')
+      const { data: profileRows, error } = await supabaseNoAuth
+        .from('profiles')
         .select('*')
         .neq('id', user.id);
 
       if (error) {
-        if (__DEV__) console.warn('ChessProvider: refreshPlayers profiles_with_match_stats error', error.code, error.message);
+        if (__DEV__) console.warn('ChessProvider: refreshPlayers profiles error', error.code, error.message);
         return;
       }
-      if (nearbyProfiles) {
+      if (profileRows && profileRows.length > 0) {
+        const ids = profileRows.map((p: { id: string }) => p.id);
+        const { data: statsRows } = await supabaseNoAuth.rpc('get_profile_match_stats_batch', { p_profile_ids: ids });
+        const statsMap = new Map<string, { games_played: number; wins: number; losses: number; draws: number }>();
+        (statsRows ?? []).forEach((r: { profile_id: string; games_played: number; wins: number; losses: number; draws: number }) => {
+          statsMap.set(r.profile_id, { games_played: r.games_played ?? 0, wins: r.wins ?? 0, losses: r.losses ?? 0, draws: r.draws ?? 0 });
+        });
+        const nearbyProfiles: SupabaseProfile[] = profileRows.map((p: Record<string, unknown>) => {
+          const s = statsMap.get(p.id as string) ?? { games_played: 0, wins: 0, losses: 0, draws: 0 };
+          return { ...p, games_played: s.games_played, wins: s.wins, losses: s.losses, draws: s.draws } as SupabaseProfile;
+        });
         const userLat = userLocation?.latitude;
         const userLon = userLocation?.longitude;
         const converted = nearbyProfiles.map((p: SupabaseProfile) =>

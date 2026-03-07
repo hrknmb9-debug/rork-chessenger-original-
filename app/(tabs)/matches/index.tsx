@@ -126,34 +126,47 @@ function useDiscoverProfiles(currentUserId: string | undefined) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
-        .from('profiles_with_match_stats')
-        .select(
-          'id, name, avatar, location, country, skill_level, rating, chess_com_rating, play_styles, preferred_time_control, bio, games_played, wins, losses, draws'
-        )
+      const { data: profileRows, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id, name, avatar, location, country, skill_level, rating, chess_com_rating, play_styles, preferred_time_control, bio')
         .neq('id', currentUserId)
         .limit(30);
 
-      if (err) throw err;
+      if (profileErr) throw profileErr;
 
-      const shuffled: DiscoverProfile[] = (data ?? [])
-        .map((r: any) => ({
-          id: r.id,
-          name: r.name ?? 'Unknown',
-          avatar: r.avatar ?? null,
-          location: r.location ?? null,
-          country: r.country ?? null,
-          skillLevel: r.skill_level ?? null,
-          rating: r.rating ?? null,
-          chessComRating: r.chess_com_rating ?? null,
-          playStyles: Array.isArray(r.play_styles) ? r.play_styles : [],
-          preferredTimeControl: r.preferred_time_control ?? null,
-          bio: r.bio ?? null,
-          games_played: r.games_played ?? null,
-          wins: r.wins ?? null,
-          losses: r.losses ?? null,
-          draws: r.draws ?? null,
-        }))
+      if (!profileRows?.length) {
+        setProfiles([]);
+        return;
+      }
+
+      const ids = profileRows.map((r: { id: string }) => r.id);
+      const { data: statsRows } = await supabase.rpc('get_profile_match_stats_batch', { p_profile_ids: ids });
+      const statsMap = new Map<string, { games_played: number; wins: number; losses: number; draws: number }>();
+      (statsRows ?? []).forEach((r: { profile_id: string; games_played: number; wins: number; losses: number; draws: number }) => {
+        statsMap.set(r.profile_id, { games_played: r.games_played ?? 0, wins: r.wins ?? 0, losses: r.losses ?? 0, draws: r.draws ?? 0 });
+      });
+
+      const shuffled: DiscoverProfile[] = profileRows
+        .map((r: any) => {
+          const s = statsMap.get(r.id) ?? { games_played: 0, wins: 0, losses: 0, draws: 0 };
+          return {
+            id: r.id,
+            name: r.name ?? 'Unknown',
+            avatar: r.avatar ?? null,
+            location: r.location ?? null,
+            country: r.country ?? null,
+            skillLevel: r.skill_level ?? null,
+            rating: r.rating ?? null,
+            chessComRating: r.chess_com_rating ?? null,
+            playStyles: Array.isArray(r.play_styles) ? r.play_styles : [],
+            preferredTimeControl: r.preferred_time_control ?? null,
+            bio: r.bio ?? null,
+            games_played: s.games_played,
+            wins: s.wins,
+            losses: s.losses,
+            draws: s.draws,
+          };
+        })
         .sort(() => Math.random() - 0.5);
 
       setProfiles(shuffled);
