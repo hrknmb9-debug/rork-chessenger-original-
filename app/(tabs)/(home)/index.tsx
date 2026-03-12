@@ -28,6 +28,7 @@ import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Player, SkillLevel, PlayStyle } from '@/types';
 import { useChess } from '@/providers/ChessProvider';
+import { useAuth } from '@/providers/AuthProvider';
 import { useLocation, calculateDistance } from '@/providers/LocationProvider';
 import { PlayerCard } from '@/components/PlayerCard';
 import { ReportButton } from '@/components/ReportButton';
@@ -244,6 +245,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { language, currentUserId, blockedUsers } = useChess();
+  const { isLoggedIn } = useAuth();
   const { userLocation, isLoading: locationLoading, toggleLocationEnabled } = useLocation();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -280,6 +282,10 @@ export default function HomeScreen() {
     fetchPlayers().finally(() => setLoading(false));
   }, [fetchPlayers]);
 
+  useEffect(() => {
+    if (!isLoggedIn && activeTab === 'online') setActiveTab('all');
+  }, [isLoggedIn, activeTab]);
+
   useFocusEffect(
     useCallback(() => {
       fetchPlayers();
@@ -309,11 +315,14 @@ export default function HomeScreen() {
     return result.sort((a, b) => (a.isOnline === b.isOnline ? a.distance - b.distance : a.isOnline ? -1 : 1));
   }, [players, searchQuery, activeTab, nearbyFilter, userLocation, blockedUsers]);
 
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: 'all', label: t('all', language) },
-    { key: 'nearby', label: t('nearby', language) },
-    { key: 'online', label: t('online', language) },
-  ];
+  const TABS: { key: TabKey; label: string }[] = useMemo(() => {
+    const base = [
+      { key: 'all' as TabKey, label: t('all', language) },
+      { key: 'nearby' as TabKey, label: t('nearby', language) },
+    ];
+    if (isLoggedIn) base.push({ key: 'online' as TabKey, label: t('online', language) });
+    return base;
+  }, [language, isLoggedIn]);
 
   const NEARBY_FILTERS: { key: NearbyFilter; label: string }[] = [
     { key: 'all', label: language === 'ja' ? '全て' : 'All' },
@@ -395,14 +404,16 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.onlineSection}>
-              <OnlineStrip
-                players={players.filter(p => !blockedUsers.includes(p.id))}
-                onPress={p => router.push(('/player/' + p.id) as any)}
-                colors={colors}
-                language={language}
-              />
-            </View>
+            {isLoggedIn && (
+              <View style={styles.onlineSection}>
+                <OnlineStrip
+                  players={players.filter(p => !blockedUsers.includes(p.id))}
+                  onPress={p => router.push(('/player/' + p.id) as any)}
+                  colors={colors}
+                  language={language}
+                />
+              </View>
+            )}
 
             <View style={styles.searchBar}>
               <Search size={16} color={colors.textMuted} />
