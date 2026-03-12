@@ -265,46 +265,44 @@ export default function HomeScreen() {
   const isActuallyLoggedIn = isLoggedIn && !!currentUserId && currentUserId !== 'me';
 
   const fetchPlayers = useCallback(async () => {
-    if (!isActuallyLoggedIn) return;
     setFetchError(null);
-    let query = supabase.from('profiles_with_match_stats').select('*');
-    if (currentUserId) {
-      query = query.neq('id', currentUserId);
-    }
-    const { data, error } = await query;
-    if (error) {
-      const msg = `profiles_with_match_stats: ${error.code ?? 'unknown'} ${error.message}`;
-      if (__DEV__) console.warn('fetchPlayers error:', msg);
+    try {
+      let query = supabase.from('profiles_with_match_stats').select('*');
+      if (currentUserId) {
+        query = query.neq('id', currentUserId);
+      }
+      const { data, error } = await query;
+      if (error) {
+        const msg = `profiles_with_match_stats: ${error.code ?? 'unknown'} ${error.message}`;
+        if (__DEV__) console.warn('fetchPlayers error:', msg);
+        setFetchError(msg);
+        return;
+      }
+      if (data) {
+        const userLat = userLocation?.latitude;
+        const userLon = userLocation?.longitude;
+        const mapped = (data as SupabaseProfile[]).map(p => mapProfile(p, userLat, userLon));
+        setPlayers(mapped);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       setFetchError(msg);
-      return;
-    }
-    if (data) {
-      const userLat = userLocation?.latitude;
-      const userLon = userLocation?.longitude;
-      const mapped = (data as SupabaseProfile[]).map(p => mapProfile(p, userLat, userLon));
-      setPlayers(mapped);
     }
   }, [userLocation, currentUserId]);
 
   useEffect(() => {
-    if (!isActuallyLoggedIn) {
-      setPlayers([]);
-      setLoading(false);
-      setFetchError(null);
-      return;
-    }
     setLoading(true);
     fetchPlayers().finally(() => setLoading(false));
-  }, [fetchPlayers, isActuallyLoggedIn]);
+  }, [fetchPlayers]);
 
   useEffect(() => {
-    if (!isLoggedIn && activeTab === 'online') setActiveTab('all');
-  }, [isLoggedIn, activeTab]);
+    if (!isActuallyLoggedIn && activeTab === 'online') setActiveTab('all');
+  }, [isActuallyLoggedIn, activeTab]);
 
   useFocusEffect(
     useCallback(() => {
-      if (isActuallyLoggedIn) fetchPlayers();
-    }, [fetchPlayers, isActuallyLoggedIn])
+      fetchPlayers();
+    }, [fetchPlayers])
   );
 
   const onRefresh = useCallback(async () => {
@@ -335,9 +333,9 @@ export default function HomeScreen() {
       { key: 'all' as TabKey, label: t('all', language) },
       { key: 'nearby' as TabKey, label: t('nearby', language) },
     ];
-    if (isLoggedIn) base.push({ key: 'online' as TabKey, label: t('online', language) });
+    if (isActuallyLoggedIn) base.push({ key: 'online' as TabKey, label: t('online', language) });
     return base;
-  }, [language, isLoggedIn]);
+  }, [language, isActuallyLoggedIn]);
 
   const NEARBY_FILTERS: { key: NearbyFilter; label: string }[] = [
     { key: 'all', label: language === 'ja' ? '全て' : 'All' },
@@ -345,36 +343,6 @@ export default function HomeScreen() {
     { key: '1', label: '0-1km' },
     { key: '1.5', label: '0-1.5km' },
   ];
-
-  if (!isActuallyLoggedIn) {
-    return (
-      <View style={styles.root}>
-        <SafeAreaView style={styles.safeHeader}>
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <AnimatedHeader colors={colors} />
-            </View>
-            <View style={styles.headerRight}>
-              <ReportButton />
-              <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
-                <Settings size={22} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-          </View>
-        </SafeAreaView>
-        <View style={styles.loginPrompt}>
-          <View style={styles.loginIconContainer}>
-            <Search size={52} color={colors.gold} />
-          </View>
-          <Text style={styles.loginTitle}>{t('tab_search', language)}</Text>
-          <Text style={styles.loginSubtitle}>{t('login_prompt_desc', language)}</Text>
-          <Pressable onPress={() => router.push('/login' as any)} style={styles.loginButton}>
-            <Text style={styles.loginButtonText}>{t('login', language)}</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
 
   if (loading) {
     return (
@@ -449,7 +417,7 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            {isLoggedIn && (
+            {isActuallyLoggedIn && (
               <View style={styles.onlineSection}>
                 <OnlineStrip
                   players={players.filter(p => !blockedUsers.includes(p.id))}
