@@ -41,6 +41,7 @@ import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComple
 import { PlayStyle } from '@/types';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
 import { SafeImage } from '@/components/SafeImage';
+import { ReportButton } from '@/components/ReportButton';
 import { supabase } from '@/utils/supabaseClient';
 
 const PLAY_STYLE_META: { key: PlayStyle; labelKey: string; emoji: string }[] = [
@@ -329,6 +330,7 @@ export default function ProfileScreen() {
           <Pressable onPress={openQR} style={styles.headerBtn}>
             <QrCode size={22} color={colors.textPrimary} />
           </Pressable>
+          <ReportButton />
           <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerBtn}>
             <Settings size={22} color={colors.textPrimary} />
           </Pressable>

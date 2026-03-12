@@ -29,6 +29,7 @@ import { Message, Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { t, getTimeAgo } from '@/utils/translations';
 import { BackNavButton } from '@/components/BackNavButton';
+import { ReportButton } from '@/components/ReportButton';
 import { primeMessageNotificationSound } from '@/utils/messageNotificationSound';
 import {
   uploadMessageImage,
@@ -805,6 +806,7 @@ export default function ChatScreen() {
               </View>
             </Pressable>
           ),
+          headerRight: () => <ReportButton context={`Chat with: ${chatPlayer.name} (ID: ${chatPlayer.id})`} />,
         }}
       />
 

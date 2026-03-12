@@ -50,6 +50,7 @@ import { t, getTimeAgo, isRTL } from '@/utils/translations';
 import { uploadTimelineImage } from '@/utils/messageImageUpload';
 import { supabase } from '@/utils/supabaseClient';
 import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
+import { ReportButton } from '@/components/ReportButton';
 
 const TEMPLATES = [
   { key: 'beginner', labelKey: 'template_beginner' },
@@ -1115,6 +1116,10 @@ export default function TimelineScreen() {
 
   const ListHeader = useMemo(() => (
     <View style={styles.composerSection}>
+      <View style={styles.timelineTopBar}>
+        <View style={{ flex: 1 }} />
+        <ReportButton />
+      </View>
       <View style={styles.filterTabs}>
         <Pressable
           onPress={() => setFilter('all')}
@@ -1595,6 +1600,7 @@ function createStyles(colors: ThemeColors) {
     filterTabText: { fontSize: 13, fontWeight: '600' as const, color: colors.textMuted },
     filterTabTextActive: { color: colors.white },
     composerSection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 },
+    timelineTopBar: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
     activeUsersBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.greenMuted, borderRadius: 10 },
     activeUsersDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.green },
     activeUsersText: { fontSize: 13, fontWeight: '600' as const, color: colors.green },

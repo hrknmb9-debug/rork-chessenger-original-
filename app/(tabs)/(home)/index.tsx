@@ -30,6 +30,7 @@ import { Player, SkillLevel, PlayStyle } from '@/types';
 import { useChess } from '@/providers/ChessProvider';
 import { useLocation, calculateDistance } from '@/providers/LocationProvider';
 import { PlayerCard } from '@/components/PlayerCard';
+import { ReportButton } from '@/components/ReportButton';
 import { t } from '@/utils/translations';
 import { supabase } from '@/utils/supabaseClient';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
@@ -348,6 +349,7 @@ export default function HomeScreen() {
             <AnimatedHeader colors={colors} />
           </View>
           <View style={styles.headerRight}>
+            <ReportButton />
             <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
               <Settings size={22} color={colors.textPrimary} />
             </Pressable>

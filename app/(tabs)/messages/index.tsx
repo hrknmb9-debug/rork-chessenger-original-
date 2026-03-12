@@ -24,6 +24,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { Conversation, Message } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { t, getTimeAgo } from '@/utils/translations';
+import { ReportButton } from '@/components/ReportButton';
 import { primeMessageNotificationSound } from '@/utils/messageNotificationSound';
 
 interface SupabaseMessage {
@@ -395,8 +396,9 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Search bar — 通知バッジは各リスト項目とメニューアイコンのみに表示 */}
-      <View style={styles.searchBar}>
+      {/* Search bar + 通報 */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
         <Search size={16} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
@@ -405,6 +407,8 @@ export default function MessagesScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+        </View>
+        <ReportButton />
       </View>
 
       {loading ? (
@@ -446,12 +450,18 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
     },
     // Search
-    searchBar: {
+    searchRow: {
       flexDirection: 'row',
       alignItems: 'center',
       marginHorizontal: 16,
       marginTop: 14,
       marginBottom: 10,
+      gap: 8,
+    },
+    searchBar: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
       backgroundColor: colors.surface,
       borderRadius: 18,
       paddingHorizontal: 16,

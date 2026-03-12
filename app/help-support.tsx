@@ -16,6 +16,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useChess } from '@/providers/ChessProvider';
 import { t } from '@/utils/translations';
 import { BackNavButton } from '@/components/BackNavButton';
+import { ReportButton } from '@/components/ReportButton';
 
 interface FAQItem {
   questionKey: string;
@@ -84,6 +85,7 @@ export default function HelpSupportScreen() {
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.textPrimary,
           headerLeft: () => <BackNavButton onPress={() => router.back()} />,
+          headerRight: () => <ReportButton />,
         }}
       />
       <ScrollView

@@ -39,6 +39,7 @@ import { Player } from '@/types';
 import { supabase } from '@/utils/supabaseClient';
 import { resolveAvatarUrl } from '@/utils/avatarUrl';
 import { getCountryFlag, getCountryName } from '@/utils/translations';
+import { ReportButton } from '@/components/ReportButton';
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
 
@@ -523,8 +524,9 @@ export default function MatchDiscoverScreen() {
             </View>
           </View>
 
-          {/* 右: マッチ通知ベル */}
+          {/* 右: 通報 + マッチ通知ベル */}
           <View style={styles.headerRight}>
+            <ReportButton />
             <Pressable
               onPress={() => router.push('/matches/notifications' as any)}
               style={[styles.headerIconBtn, { backgroundColor: isDark ? colors.surface : '#F3F4F6' }]}

@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Mail, Lock, User, ArrowRight, Languages } from 'lucide-react-native';
+import { Mail, Lock, User, ArrowRight, Languages, Check } from 'lucide-react-native';
 import { ThemeColors } from '@/constants/colors';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
@@ -234,6 +234,7 @@ export default function LoginScreen() {
   const [lichessRating, setLichessRating] = useState<string>('');
   const [bio, setBio] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [termsAgreed, setTermsAgreed] = useState<boolean>(false);
 
   const buttonScale = useRef(new Animated.Value(1)).current;
   const formOpacity = useRef(new Animated.Value(0)).current;
@@ -389,8 +390,43 @@ export default function LoginScreen() {
               </>
             )}
 
+            {!isLogin && (
+              <View style={styles.termsWrap}>
+                <Pressable
+                  onPress={() => setTermsAgreed(prev => !prev)}
+                  style={[styles.termsRow, { borderColor: termsAgreed ? '#22C55E' : 'rgba(139,92,246,0.2)' }]}
+                >
+                  <View style={[styles.checkbox, { backgroundColor: termsAgreed ? '#22C55E' : 'transparent', borderColor: termsAgreed ? '#22C55E' : '#9CA3AF' }]}>
+                    {termsAgreed && <Check size={12} color="#fff" strokeWidth={3} />}
+                  </View>
+                  <View style={styles.termsTextRow}>
+                    {(() => {
+                      const full = t('terms_agree', language);
+                      const link = t('terms_agree_link', language);
+                      const i = full.indexOf(link);
+                      const before = i >= 0 ? full.slice(0, i) : full;
+                      const after = i >= 0 ? full.slice(i + link.length) : '';
+                      return (
+                        <>
+                          {before ? <Text style={[styles.termsText, { color: colors.textPrimary }]}>{before}</Text> : null}
+                          <Pressable onPress={() => router.push('/terms-of-service' as any)} hitSlop={8}>
+                            <Text style={styles.termsLink}>{link}</Text>
+                          </Pressable>
+                          {after ? <Text style={[styles.termsText, { color: colors.textPrimary }]}>{after}</Text> : null}
+                        </>
+                      );
+                    })()}
+                  </View>
+                </Pressable>
+              </View>
+            )}
+
             <Animated.View style={{ transform: [{ scale: buttonScale }], marginTop: 8 }}>
-              <Pressable onPress={handleSubmit} disabled={loading} style={styles.submitBtnWrap}>
+              <Pressable
+                onPress={handleSubmit}
+                disabled={loading || (!isLogin && !termsAgreed)}
+                style={[styles.submitBtnWrap, !isLogin && !termsAgreed && styles.submitBtnDisabled]}
+              >
                 <LinearGradient
                   colors={['#22C55E', '#16A34A']}
                   start={{ x: 0, y: 0 }}
@@ -532,6 +568,29 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '700',
       letterSpacing: 0.3,
     },
+    termsWrap: { marginTop: 4 },
+    termsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 14,
+      borderWidth: 1,
+      backgroundColor: '#F8F7FF',
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    termsTextRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 2 },
+    termsText: { fontSize: 13, fontWeight: '500' },
+    termsLink: { fontSize: 13, fontWeight: '600', color: '#8B5CF6', textDecorationLine: 'underline' },
+    submitBtnDisabled: { opacity: 0.5 },
     switchRow: {
       flexDirection: 'row',
       justifyContent: 'center',

@@ -43,6 +43,7 @@ import {
 import { t, getCountryFlag, getCountryName } from '@/utils/translations';
 import { translateText, getTargetLanguage, decodeForDisplay, onTranslationComplete } from '@/utils/translateText';
 import { BackNavButton } from '@/components/BackNavButton';
+import { ReportButton } from '@/components/ReportButton';
 import { PlayStyle } from '@/types';
 
 const TIME_CONTROLS = ['5+0', '10+0', '15+10', '30+0', '60+30'];
@@ -245,6 +246,7 @@ export default function PlayerDetailScreen() {
           headerLeft: () => <BackNavButton onPress={() => router.back()} />,
           headerRight: () => (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <ReportButton context={player ? `User: ${player.name} (ID: ${id})` : ''} />
               <Pressable onPress={handleToggleFavorite} style={styles.headerBlockBtn}>
                 <Star size={20} color={isFavorite ? colors.gold : colors.textMuted} fill={isFavorite ? colors.gold : 'transparent'} />
               </Pressable>
