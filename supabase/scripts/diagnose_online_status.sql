@@ -1,13 +1,13 @@
 -- オンライン表示の診断用
 -- Supabase SQL Editor で実行し、last_seen の状況を確認
--- 5分以内 = オンライン扱い、5分超 = オフライン扱い
+-- 2分以内 = オンライン扱い、2分超 = オフライン扱い
 
 -- 1. 直近の last_seen 更新状況（オンライン扱いになるユーザー）
 SELECT id, name, last_seen, last_active,
   CASE
     WHEN last_seen IS NULL THEN 'オフライン (last_seen null)'
-    WHEN last_seen > NOW() - INTERVAL '5 minutes' THEN 'オンライン (5分以内)'
-    ELSE 'オフライン (5分超)'
+    WHEN last_seen > NOW() - INTERVAL '2 minutes' THEN 'オンライン (2分以内)'
+    ELSE 'オフライン (2分超)'
   END AS online_status
 FROM profiles
 ORDER BY last_seen DESC NULLS LAST

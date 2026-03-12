@@ -64,7 +64,7 @@ interface SupabaseProfile {
   last_seen?: string;
 }
 
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5分以内の last_seen のみオンライン扱い（last_seen のみ使用、last_active は使用しない）
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // 2分以内の last_seen のみオンライン扱い
 
 function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number): Player {
   const lat = profile.latitude ?? 0;
@@ -422,7 +422,7 @@ export default function HomeScreen() {
             {isActuallyLoggedIn && (
               <View style={styles.onlineSection}>
                 <OnlineStrip
-                  players={players.filter(p => !blockedUsers.includes(p.id))}
+                  players={players.filter(p => !blockedUsers.includes(p.id) && p.isOnline)}
                   onPress={p => router.push(('/player/' + p.id) as any)}
                   colors={colors}
                   language={language}
