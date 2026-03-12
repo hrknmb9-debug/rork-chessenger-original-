@@ -90,6 +90,20 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return false;
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        const msg = error?.message ?? '';
+        if (msg.includes('Invalid Refresh Token') || msg.includes('Refresh Token Not Found') || msg.includes('AuthApiError')) {
+          console.log('Auth: Invalid refresh token on app resume, signing out');
+          await supabase.auth.signOut({ scope: 'local' });
+          await AsyncStorage.multiRemove(ALL_STORAGE_KEYS).catch(() => {});
+          setUser(null);
+          if (initialLoadDone.current) {
+            try { router.replace('/login' as any); } catch (e) { console.log('Auth: Nav to login failed', e); }
+          }
+          return true;
+        }
+      }
       const started = await AsyncStorage.getItem(SESSION_STARTED_KEY);
       if (!started) {
         await AsyncStorage.setItem(SESSION_STARTED_KEY, String(Date.now()));
@@ -125,50 +139,80 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         console.log('AUTH_SESSION_CHECK:', sessionError ? sessionError.message : 'no error', 'hasSession:', !!session);
         if (session?.user) {
-          const defaultAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
-          const authUser = await loadProfileFromSupabase(
-            session.user.id,
-            session.user.email ?? '',
-            session.user.user_metadata?.name ?? session.user.email?.split('@')[0] ?? '',
-            defaultAvatar
-          );
-          setUser(authUser);
-          await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
-          console.log('Auth: User loaded from Supabase session', authUser.name);
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError || !user) {
+            const msg = userError?.message ?? '';
+            const isInvalidToken =
+              msg.includes('Invalid Refresh Token') ||
+              msg.includes('Refresh Token Not Found') ||
+              msg.includes('AuthApiError');
+            if (isInvalidToken) {
+              console.log('Auth: Invalid refresh token, clearing session');
+              await supabase.auth.signOut({ scope: 'local' });
+              await AsyncStorage.multiRemove(ALL_STORAGE_KEYS).catch(() => {});
+            }
+            setUser(null);
+            console.log('Auth: No valid session (getUser failed)');
+          } else {
+            const defaultAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=200&h=200&fit=crop&crop=face';
+            const authUser = await loadProfileFromSupabase(
+              session.user.id,
+              session.user.email ?? '',
+              session.user.user_metadata?.name ?? session.user.email?.split('@')[0] ?? '',
+              defaultAvatar
+            );
+            setUser(authUser);
+            await AsyncStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
+            console.log('Auth: User loaded from Supabase session', authUser.name);
+          }
         } else {
           console.log('Auth: No active session found - app will work without login');
           setUser(null);
         }
       } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const isInvalidToken =
+          msg.includes('Invalid Refresh Token') ||
+          msg.includes('Refresh Token Not Found') ||
+          msg.includes('AuthApiError');
         console.log('Auth: Failed to load user', e);
-        // Native: AsyncStorage フォールバック
-        try {
-          const stored = await AsyncStorage.getItem(AUTH_KEY);
-          if (stored) {
-            const parsed = JSON.parse(stored) as AuthUser;
-            if (parsed.id && parsed.id !== 'me') {
-              setUser(parsed);
-              console.log('Auth: Fallback to AsyncStorage', parsed.name);
-            } else {
-              await AsyncStorage.removeItem(AUTH_KEY);
-            }
+        if (isInvalidToken) {
+          console.log('Auth: Invalid refresh token in catch - clearing and NOT falling back to storage');
+          setUser(null);
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          await AsyncStorage.multiRemove(ALL_STORAGE_KEYS).catch(() => {});
+          if (typeof localStorage !== 'undefined') {
+            try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
           }
-        } catch (err) {
-          console.log('Auth: AsyncStorage fallback failed', err);
-        }
-        // Web: localStorage フォールバック
-        if (typeof localStorage !== 'undefined') {
+        } else {
+          // トークンエラー以外: 従来どおり AsyncStorage / localStorage フォールバック
           try {
-            const lsStored = localStorage.getItem('chess_auth_user');
-            if (lsStored) {
-              const parsed = JSON.parse(lsStored) as AuthUser;
+            const stored = await AsyncStorage.getItem(AUTH_KEY);
+            if (stored) {
+              const parsed = JSON.parse(stored) as AuthUser;
               if (parsed.id && parsed.id !== 'me') {
                 setUser(parsed);
-                console.log('Auth: Fallback to localStorage', parsed.name);
+                console.log('Auth: Fallback to AsyncStorage', parsed.name);
+              } else {
+                await AsyncStorage.removeItem(AUTH_KEY);
               }
             }
-          } catch (lsErr) {
-            console.log('Auth: localStorage fallback failed', lsErr);
+          } catch (err) {
+            console.log('Auth: AsyncStorage fallback failed', err);
+          }
+          if (typeof localStorage !== 'undefined') {
+            try {
+              const lsStored = localStorage.getItem('chess_auth_user');
+              if (lsStored) {
+                const parsed = JSON.parse(lsStored) as AuthUser;
+                if (parsed.id && parsed.id !== 'me') {
+                  setUser(parsed);
+                  console.log('Auth: Fallback to localStorage', parsed.name);
+                }
+              }
+            } catch (lsErr) {
+              console.log('Auth: localStorage fallback failed', lsErr);
+            }
           }
         }
       } finally {

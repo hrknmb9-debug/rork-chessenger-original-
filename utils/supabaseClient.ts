@@ -63,7 +63,12 @@ export async function clearStaleSession(): Promise<void> {
     if (session) {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (error || !user) {
-        console.log('clearStaleSession: stale session detected, signing out locally');
+        const msg = error?.message ?? '';
+        const isRefreshTokenInvalid =
+          msg.includes('Invalid Refresh Token') ||
+          msg.includes('Refresh Token Not Found') ||
+          msg.includes('AuthApiError');
+        console.log('clearStaleSession: stale session detected', isRefreshTokenInvalid ? '(Invalid Refresh Token)' : '', '- signing out locally');
         await supabase.auth.signOut({ scope: 'local' });
       }
     }
