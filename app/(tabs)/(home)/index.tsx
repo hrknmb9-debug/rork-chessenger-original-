@@ -350,6 +350,37 @@ export default function HomeScreen() {
     );
   }
 
+  const isActuallyLoggedIn = isLoggedIn && !!currentUserId && currentUserId !== 'me';
+  if (!isActuallyLoggedIn) {
+    return (
+      <View style={styles.root}>
+        <SafeAreaView style={styles.safeHeader}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <AnimatedHeader colors={colors} />
+            </View>
+            <View style={styles.headerRight}>
+              <ReportButton />
+              <Pressable onPress={() => router.push('/settings' as any)} style={styles.headerIconBtn}>
+                <Settings size={22} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+        <View style={styles.loginPrompt}>
+          <View style={styles.loginIconContainer}>
+            <Search size={52} color={colors.gold} />
+          </View>
+          <Text style={styles.loginTitle}>{t('tab_search', language)}</Text>
+          <Text style={styles.loginSubtitle}>{t('login_prompt_desc', language)}</Text>
+          <Pressable onPress={() => router.push('/login' as any)} style={styles.loginButton}>
+            <Text style={styles.loginButtonText}>{t('login', language)}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safeHeader}>
@@ -501,5 +532,44 @@ function createStyles(colors: ThemeColors) {
     errorText: { fontSize: 13, marginBottom: 10 },
     retryBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
     retryBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+    loginPrompt: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 40,
+    },
+    loginIconContainer: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: colors.goldMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
+    loginTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 10,
+    },
+    loginSubtitle: {
+      fontSize: 15,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginBottom: 32,
+      lineHeight: 23,
+    },
+    loginButton: {
+      backgroundColor: colors.gold,
+      paddingHorizontal: 40,
+      paddingVertical: 15,
+      borderRadius: 20,
+    },
+    loginButtonText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#fff',
+    },
   });
 }
