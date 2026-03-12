@@ -64,6 +64,8 @@ interface SupabaseProfile {
   last_seen?: string;
 }
 
+const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15分以内の last_seen のみオンライン扱い
+
 function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number): Player {
   const lat = profile.latitude ?? 0;
   const lon = profile.longitude ?? 0;
@@ -71,6 +73,10 @@ function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number
   if (userLat && userLon && lat !== 0 && lon !== 0) {
     distance = Math.round(calculateDistance(userLat, userLon, lat, lon) * 10) / 10;
   }
+  const lastSeen = profile.last_seen ?? profile.last_active ?? '';
+  const isOnline = lastSeen
+    ? new Date(lastSeen).getTime() > Date.now() - ONLINE_THRESHOLD_MS
+    : false;
   return {
     id: profile.id,
     name: profile.name ?? 'Unknown',
@@ -84,7 +90,7 @@ function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number
     losses: profile.losses ?? 0,
     draws: profile.draws ?? 0,
     distance,
-    isOnline: profile.is_online ?? false,
+    isOnline,
     lastActive: profile.last_active ?? '',
     bio: profile.bio ?? '',
     bioEn: '',
@@ -256,7 +262,10 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const isActuallyLoggedIn = isLoggedIn && !!currentUserId && currentUserId !== 'me';
+
   const fetchPlayers = useCallback(async () => {
+    if (!isActuallyLoggedIn) return;
     setFetchError(null);
     let query = supabase.from('profiles_with_match_stats').select('*');
     if (currentUserId) {
@@ -278,9 +287,15 @@ export default function HomeScreen() {
   }, [userLocation, currentUserId]);
 
   useEffect(() => {
+    if (!isActuallyLoggedIn) {
+      setPlayers([]);
+      setLoading(false);
+      setFetchError(null);
+      return;
+    }
     setLoading(true);
     fetchPlayers().finally(() => setLoading(false));
-  }, [fetchPlayers]);
+  }, [fetchPlayers, isActuallyLoggedIn]);
 
   useEffect(() => {
     if (!isLoggedIn && activeTab === 'online') setActiveTab('all');
@@ -288,8 +303,8 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchPlayers();
-    }, [fetchPlayers])
+      if (isActuallyLoggedIn) fetchPlayers();
+    }, [fetchPlayers, isActuallyLoggedIn])
   );
 
   const onRefresh = useCallback(async () => {
@@ -331,26 +346,6 @@ export default function HomeScreen() {
     { key: '1.5', label: '0-1.5km' },
   ];
 
-  if (loading) {
-    return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
-
-  if (fetchError) {
-    return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ color: colors.textMuted, textAlign: 'center', marginBottom: 16 }}>{fetchError}</Text>
-        <Pressable onPress={() => { setLoading(true); fetchPlayers().finally(() => setLoading(false)); }} style={{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: colors.accent, borderRadius: 8 }}>
-          <Text style={{ color: '#fff', fontWeight: '600' }}>{language === 'ja' ? '再試行' : 'Retry'}</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  const isActuallyLoggedIn = isLoggedIn && !!currentUserId && currentUserId !== 'me';
   if (!isActuallyLoggedIn) {
     return (
       <View style={styles.root}>
@@ -377,6 +372,25 @@ export default function HomeScreen() {
             <Text style={styles.loginButtonText}>{t('login', language)}</Text>
           </Pressable>
         </View>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ color: colors.textMuted, textAlign: 'center', marginBottom: 16 }}>{fetchError}</Text>
+        <Pressable onPress={() => { setLoading(true); fetchPlayers().finally(() => setLoading(false)); }} style={{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: colors.accent, borderRadius: 8 }}>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>{language === 'ja' ? '再試行' : 'Retry'}</Text>
+        </Pressable>
       </View>
     );
   }

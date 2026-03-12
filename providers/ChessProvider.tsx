@@ -168,6 +168,10 @@ function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, use
     distance = Math.round(calculateDistance(userLat, userLon, rounded.latitude, rounded.longitude) * 10) / 10;
   }
 
+  const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;
+  const lastSeen = profile.last_seen ?? profile.last_active ?? '';
+  const isOnline = lastSeen ? new Date(lastSeen).getTime() > Date.now() - ONLINE_THRESHOLD_MS : false;
+
   return {
     id: profile.id,
     name: profile.name ?? 'Unknown',
@@ -181,7 +185,7 @@ function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, use
     losses: profile.losses ?? 0,
     draws: profile.draws ?? 0,
     distance,
-    isOnline: profile.is_online ?? false,
+    isOnline,
     lastActive: profile.last_active ?? '',
     bio: profile.bio ?? '',
     bioEn: '',
@@ -251,10 +255,27 @@ export const [ChessProvider, useChess] = createContextHook(() => {
     const initSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        setAccessToken(session?.access_token ?? null);
-        if (session?.user) setCurrentUserId(session.user.id);
+        if (!session?.user) {
+          setAccessToken(null);
+          setCurrentUserId(null);
+          return;
+        }
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          const msg = error?.message ?? '';
+          if (msg.includes('Invalid Refresh Token') || msg.includes('Refresh Token Not Found') || msg.includes('AuthApiError')) {
+            console.log('ChessProvider: initSession - invalid token, clearing');
+            await supabase.auth.signOut({ scope: 'local' });
+            setAccessToken(null);
+            setCurrentUserId(null);
+            return;
+          }
+        }
+        setAccessToken(session.access_token ?? null);
+        setCurrentUserId(session.user.id);
       } catch {
-        /* lock timeout etc. - onAuthStateChange will update */
+        setAccessToken(null);
+        setCurrentUserId(null);
       }
     };
     initSession();
