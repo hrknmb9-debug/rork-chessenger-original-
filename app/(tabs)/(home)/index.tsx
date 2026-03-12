@@ -64,7 +64,7 @@ interface SupabaseProfile {
   last_seen?: string;
 }
 
-const ONLINE_THRESHOLD_MS = 15 * 60 * 1000; // 15分以内の last_seen のみオンライン扱い
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5分以内の last_seen のみオンライン扱い（last_seen のみ使用、last_active は使用しない）
 
 function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number): Player {
   const lat = profile.latitude ?? 0;
@@ -73,10 +73,12 @@ function mapProfile(profile: SupabaseProfile, userLat?: number, userLon?: number
   if (userLat && userLon && lat !== 0 && lon !== 0) {
     distance = Math.round(calculateDistance(userLat, userLon, lat, lon) * 10) / 10;
   }
-  const lastSeen = profile.last_seen ?? profile.last_active ?? '';
-  const isOnline = lastSeen
-    ? new Date(lastSeen).getTime() > Date.now() - ONLINE_THRESHOLD_MS
-    : false;
+  const lastSeenRaw = profile.last_seen ?? '';
+  const lastSeenMs = lastSeenRaw ? new Date(lastSeenRaw).getTime() : 0;
+  const isOnline =
+    lastSeenMs > 0 &&
+    !Number.isNaN(lastSeenMs) &&
+    lastSeenMs > Date.now() - ONLINE_THRESHOLD_MS;
   return {
     id: profile.id,
     name: profile.name ?? 'Unknown',

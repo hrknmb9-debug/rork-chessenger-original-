@@ -168,9 +168,13 @@ function supabaseProfileToPlayer(profile: SupabaseProfile, userLat?: number, use
     distance = Math.round(calculateDistance(userLat, userLon, rounded.latitude, rounded.longitude) * 10) / 10;
   }
 
-  const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;
-  const lastSeen = profile.last_seen ?? profile.last_active ?? '';
-  const isOnline = lastSeen ? new Date(lastSeen).getTime() > Date.now() - ONLINE_THRESHOLD_MS : false;
+  const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5分以内の last_seen のみオンライン
+  const lastSeenRaw = profile.last_seen ?? '';
+  const lastSeenMs = lastSeenRaw ? new Date(lastSeenRaw).getTime() : 0;
+  const isOnline =
+    lastSeenMs > 0 &&
+    !Number.isNaN(lastSeenMs) &&
+    lastSeenMs > Date.now() - ONLINE_THRESHOLD_MS;
 
   return {
     id: profile.id,
@@ -752,9 +756,9 @@ export const [ChessProvider, useChess] = createContextHook(() => {
           converted.forEach((p) => profileCacheRef.current.set(p.id, p));
           console.log('ChessProvider: Loaded', converted.length, 'players from Supabase');
 
-          const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+          const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
           const activeCount = nearbyProfiles.filter((p: SupabaseProfile) =>
-            p.last_seen && p.last_seen > fifteenMinAgo
+            p.last_seen && p.last_seen > fiveMinAgo
           ).length;
           setActiveUsersCount(activeCount + 1);
         }
@@ -1392,9 +1396,9 @@ export const [ChessProvider, useChess] = createContextHook(() => {
         setSupabasePlayers(converted);
         converted.forEach((p) => profileCacheRef.current.set(p.id, p));
 
-        const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
         const activeCount = nearbyProfiles.filter((p: SupabaseProfile) =>
-          p.last_seen && p.last_seen > fifteenMinAgo
+          p.last_seen && p.last_seen > fiveMinAgo
         ).length;
         setActiveUsersCount(activeCount + 1);
 
